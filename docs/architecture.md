@@ -56,7 +56,7 @@ This is the rule that keeps `copier update` safe.
 |---|---|---|
 | skeleton (`src/`, `app/`, configs), gated by answers | **Copier template** | rendered only in `greenfield` mode |
 | `.copier-answers.yml` | Copier | records answers; never hand-edit |
-| `.ruler/**` | **Copier template** | the rulebook **source** |
+| `.ruler/**` | **Copier template** | the rulebook **source** — three conditionally-rendered modules: `00-operating` (shared loop + DoD), `10-<language>` (language/framework standards), `20-<architecture>` (architecture standards, concretized to the language). Only the modules matching `language_stack`/`architecture` render, so the rulebook is never agnostic. |
 | `CLAUDE.md`, `AGENTS.md` | **ruler** (generated) | Copier is told to **exclude** these — rendering them would clobber ruler on update |
 | `openspec/`, `.claude/skills/openspec-*`, `.claude/commands/opsx/` | **OpenSpec** | created by `init`, upgraded by `update` |
 | `.claude/settings.json`, `.claude/hooks/dod.mjs` | **the gate** | committed hook config |

@@ -6,8 +6,8 @@ set it. Answers are recorded in `.copier-answers.yml` and re-used by `copier upd
 | Setting | Values | What it controls |
 |---|---|---|
 | `project_name` | any string | Name used in generated files, the rulebook, and docs. A slug (`pkg`) is derived for package/import names (`My Service` → `my_service`). |
-| `language_stack` | `ts-node` · `ts-next` · `py-fastapi` | The whole toolchain: which skeleton is scaffolded, the test runner, the gate's source/test globs, and the CI setup step. |
-| `architecture` | `service-based` · `clean-layered` | The directory layout and the rules stated in `ARCHITECTURE.md`. Service-based groups by capability behind contracts; clean-layered enforces inward-pointing dependencies (domain → application → adapters). |
+| `language_stack` | `ts-node` · `ts-next` · `py-fastapi` | The whole toolchain: the skeleton, the test runner, the gate's globs, the CI step — **and the coding-standards module** fanned into the agent rulebook (`.ruler/10-<language>.md`), specific to that language/framework. |
+| `architecture` | `service-based` · `clean-layered` | The directory layout (`ARCHITECTURE.md`) **and the architecture-standards module** in the rulebook (`.ruler/20-<architecture>.md`), concretized to the chosen language with real directories and forbidden imports. Service-based groups by capability behind contracts; clean-layered enforces inward-pointing dependencies. |
 | `mode` | `greenfield` · `adopt` | `greenfield` scaffolds a full project skeleton. `adopt` writes **no** skeleton — only the standard's wiring (rulebook, process, gate) into an existing repo. |
 | `gate` | `strict` · `advisory` | `strict` **blocks** work until the definition-of-done passes. `advisory` reports the same findings but never blocks — the honest way to adopt gradually. |
 | `agents` | any of `claude`, `codex`, `copilot` | Which tools get a generated rulebook (ruler targets) and OpenSpec tool integration. More agents = more entry files kept in sync from the one `.ruler/` source. |
@@ -32,6 +32,20 @@ a matching test, misplaces a test, or the suite is red:
 **`mode: adopt`** omits: the project skeleton, `pyproject.toml`/`package.json`,
 `ARCHITECTURE.md`. It keeps: `.ruler/`, the gate (`.claude/hooks/dod.mjs`,
 `.agent-standard/gate.json`, `.claude/settings.json`), the CI workflow, and OpenSpec init.
+
+## Standards delivered to the agents
+
+The generated rulebook (`CLAUDE.md` / `AGENTS.md`, built by ruler from `.ruler/`) is
+assembled from three modules, so agents get exactly the standards for *this* project and
+nothing agnostic:
+
+- `00-operating.md` — the shared loop (spec → plan → build → done) and definition of done.
+- `10-<language>.md` — opinionated, research-backed **language/framework standards** (Python+FastAPI, TypeScript+Node, or TypeScript+Next.js): typing discipline, error handling, framework patterns, tooling.
+- `20-<architecture>.md` — **architecture standards** concretized to your language: the real directories, the forbidden imports, contracts/DTOs at the boundary, and how to enforce it with an arch-test.
+
+Selecting `py-fastapi` gives Python standards; `ts-next` gives Next.js standards; the
+architecture module names actual directories for that language. To change a standard, edit
+`.ruler/` and run `ruler apply` — never the generated files.
 
 ## What you may not do
 

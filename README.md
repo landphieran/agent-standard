@@ -1,8 +1,9 @@
 # agent-standard
 
 A configurable **paved path** for AI-agent-driven development. Adopt it into a repository
-and get one consistent, *enforced* process: a planning workflow, one rulebook shared
-across every agent tool, an opinionated architecture skeleton for your stack, and a
+and get one consistent, *enforced* process: a planning workflow, a rulebook of
+**opinionated, research-backed coding standards specific to your language and
+architecture** (shared across every agent tool), a matching project skeleton, and a
 definition-of-done gate that blocks "done" until the plan was followed and the tests are
 real — in the right place, of the right type, and passing.
 

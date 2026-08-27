@@ -1,0 +1,15 @@
+# Example 4 — greenfield Python FastAPI, clean/layered architecture.
+# Blocking gate showcasing unit-vs-integration test SEPARATION (tests/unit vs
+# tests/integration), Claude + Codex, required CI.
+#
+#   copier copy --trust --data-file examples/4-py-fastapi-clean-strict.yml \
+#     gh:landphieran/agent-standard ./ledger-api
+project_name: ledger-api
+language_stack: py-fastapi
+architecture: clean-layered
+mode: greenfield
+gate: strict
+agents:
+  - claude
+  - codex
+ci: true

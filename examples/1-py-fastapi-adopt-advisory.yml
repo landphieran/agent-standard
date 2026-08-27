@@ -1,0 +1,14 @@
+# Example 1 — lightweight drop-in to an EXISTING Python API.
+# No skeleton is written; the gate reports (advisory) rather than blocks; rulebook
+# goes to Claude only. Use this to try the standard on a repo without disruption.
+#
+#   copier copy --trust --data-file examples/1-py-fastapi-adopt-advisory.yml \
+#     gh:landphieran/agent-standard ./existing-repo
+project_name: payments-api
+language_stack: py-fastapi
+architecture: service-based
+mode: adopt
+gate: advisory
+agents:
+  - claude
+ci: false

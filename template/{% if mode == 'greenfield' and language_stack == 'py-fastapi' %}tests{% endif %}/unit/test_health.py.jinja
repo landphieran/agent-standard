@@ -1,0 +1,6 @@
+"""Unit test — the health logic in isolation. Lives under tests/unit/ by convention."""
+from {{ pkg }}.health import health_status
+
+
+def test_health_status_is_ok():
+    assert health_status()["status"] == "ok"

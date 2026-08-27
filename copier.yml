@@ -64,6 +64,12 @@ ci:
 
 # ── derived / non-asked ──────────────────────────────────────────────────────
 
+# Import-safe package name derived from the project name (e.g. "My Service" -> "my_service").
+pkg:
+  type: str
+  when: false
+  default: "{{ project_name | lower | replace('-', '_') | replace(' ', '_') }}"
+
 _message_after_copy: |
   agent-standard is set up for "{{ project_name }}" ({{ language_stack }} · {{ architecture }}).
 

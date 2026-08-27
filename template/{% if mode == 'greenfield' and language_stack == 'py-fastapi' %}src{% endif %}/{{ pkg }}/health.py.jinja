@@ -1,0 +1,5 @@
+"""Health domain logic — a pure function, unit-testable without the web layer."""
+
+
+def health_status() -> dict:
+    return {"status": "ok", "service": "{{ project_name }}"}

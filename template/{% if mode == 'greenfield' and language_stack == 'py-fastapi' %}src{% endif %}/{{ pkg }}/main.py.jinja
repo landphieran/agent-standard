@@ -1,0 +1,11 @@
+"""FastAPI application entry point."""
+from fastapi import FastAPI
+
+from {{ pkg }}.health import health_status
+
+app = FastAPI(title="{{ project_name }}")
+
+
+@app.get("/health")
+def health() -> dict:
+    return health_status()

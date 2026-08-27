@@ -1,0 +1,12 @@
+"""Integration test — the running app via its HTTP surface. Lives under tests/integration/."""
+import pytest
+from fastapi.testclient import TestClient
+
+from {{ pkg }}.main import app
+
+
+@pytest.mark.integration
+def test_health_endpoint_returns_ok():
+    response = TestClient(app).get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

@@ -52,12 +52,15 @@ const matchesAny = (path, globs) => (globs || []).some(g => globToRe(g).test(pat
 
 /** Files changed in the range under scrutiny (normalised to forward slashes). */
 function changedFiles () {
+  // Not a git repo, or no commit yet → nothing we can compare against; do not block.
+  if (!shOk('git rev-parse --is-inside-work-tree')) return null
   let out
   if (isCI) {
     const base = argVal('--base') || process.env.DOD_BASE || 'origin/main'
     const head = argVal('--head') || process.env.DOD_HEAD || 'HEAD'
     out = [sh(`git diff --name-only ${base} ${head}`)]
   } else {
+    if (!shOk('git rev-parse HEAD')) return null // repo with no commits yet
     // local: working tree + staged vs HEAD, plus new untracked files
     out = [sh('git diff --name-only HEAD'), sh('git ls-files --others --exclude-standard')]
   }
@@ -89,6 +92,7 @@ function main () {
   const mode = cfg.mode || 'strict'
 
   const changed = changedFiles()
+  if (changed === null) return 0 // no git history to compare against → nothing to gate
   const source = changed.filter(f => matchesAny(f, cfg.sourceGlobs) && !isTestPath(f) &&
     !matchesAny(f, cfg.unitTestGlobs) && !matchesAny(f, cfg.integrationTestGlobs))
 

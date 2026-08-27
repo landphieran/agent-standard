@@ -1,0 +1,85 @@
+# Architecture — {{ project_name }}
+
+**Stack:** {{ language_stack }} · **Style:** {{ architecture }}
+
+This document is the contract for where code goes. The definition-of-done gate enforces
+the *test* half of it; reviewers enforce the rest.
+
+{% if architecture == 'service-based' -%}
+## Service-based
+
+Organise by **service capability**, each with an explicit contract at its edge.
+
+{% if language_stack == 'py-fastapi' -%}
+```
+src/{{ pkg }}/
+  main.py              # composition root — wires services to the API
+  health.py            # a capability's logic (pure, unit-testable)
+  services/            # one module per service capability
+  contracts/           # request/response models (pydantic) — the service boundary
+tests/unit/            # capability logic in isolation
+tests/integration/     # the app over HTTP (TestClient)
+```
+{%- elif language_stack == 'ts-node' -%}
+```
+src/
+  index.ts             # composition root
+  services/            # one module per service capability
+  contracts/           # zod/DTO types — the service boundary
+tests/integration/     # service over its transport
+# unit tests colocated as *.test.ts next to the code
+```
+{%- else -%}
+```
+app/                   # routes / server components
+src/services/          # service capabilities
+src/contracts/         # DTOs — the service boundary
+__tests__/             # unit/component
+e2e/                   # end-to-end (Playwright)
+```
+{%- endif %}
+
+**Rules:** a service never reaches into another service's internals — only its contract.
+Business logic is independent of the transport (HTTP) so it is unit-testable without it.
+{%- else -%}
+## Clean / layered
+
+Dependencies point **inward**: outer layers depend on inner, never the reverse.
+
+{% if language_stack == 'py-fastapi' -%}
+```
+src/{{ pkg }}/
+  domain/              # entities + rules — no framework imports
+  application/         # use cases — orchestrates the domain
+  adapters/            # FastAPI routes, DB, external I/O
+  main.py              # composition root — wires adapters to use cases
+tests/unit/            # domain + application, no I/O
+tests/integration/     # adapters + the wired app
+```
+{%- elif language_stack == 'ts-node' -%}
+```
+src/
+  domain/              # entities + rules — no framework imports
+  application/         # use cases
+  adapters/            # transport, persistence, external I/O
+  index.ts             # composition root
+tests/integration/     # adapters + wired app
+# unit tests colocated as *.test.ts
+```
+{%- else -%}
+```
+src/domain/            # entities + rules
+src/application/       # use cases
+app/                   # Next.js routes = adapters
+__tests__/             # unit/component
+e2e/                   # end-to-end (Playwright)
+```
+{%- endif %}
+
+**Rules:** the domain imports nothing from outer layers or frameworks. The web framework
+is an adapter, swappable without touching domain or application code.
+{%- endif %}
+
+## Decisions
+
+Record architectural decisions as ADRs in `docs/decisions/` (one Markdown file each).

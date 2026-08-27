@@ -1,0 +1,9 @@
+// Health capability — framework-free logic, imported by the route and the tests.
+export interface Health {
+  status: 'ok'
+  service: string
+}
+
+export function healthStatus (): Health {
+  return { status: 'ok', service: '{{ project_name }}' }
+}

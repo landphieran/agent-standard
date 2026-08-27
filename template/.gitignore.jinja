@@ -1,0 +1,17 @@
+# Dependencies / build
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.vitest/
+
+# Env / local
+.env
+.env.*
+!.env.example
+{% if 'claude' in agents -%}
+# Personal agent settings — never commit
+.claude/settings.local.json
+{% endif -%}

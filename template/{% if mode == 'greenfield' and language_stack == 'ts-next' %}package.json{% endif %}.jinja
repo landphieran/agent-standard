@@ -1,0 +1,22 @@
+{
+  "name": "{{ pkg }}",
+  "version": "0.1.0",
+  "description": "{{ project_name }}",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test": "vitest run",
+    "test:unit": "vitest run __tests__",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

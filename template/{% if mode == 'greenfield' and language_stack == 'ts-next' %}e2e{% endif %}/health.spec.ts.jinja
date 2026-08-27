@@ -1,0 +1,9 @@
+// End-to-end test (Playwright) — runs the real app. Lives under e2e/ by convention.
+// Run with `npm run test:e2e` (requires `npx playwright install`).
+import { test, expect } from '@playwright/test'
+
+test('health endpoint is ok', async ({ request }) => {
+  const res = await request.get('/api/health')
+  expect(res.ok()).toBeTruthy()
+  expect((await res.json()).status).toBe('ok')
+})

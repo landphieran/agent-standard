@@ -1,0 +1,9 @@
+// Unit test — the __tests__ convention (Next.js official Vitest guide).
+import { describe, it, expect } from 'vitest'
+import { healthStatus } from '../src/health'
+
+describe('healthStatus', () => {
+  it('reports ok', () => {
+    expect(healthStatus().status).toBe('ok')
+  })
+})

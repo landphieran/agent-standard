@@ -1,0 +1,10 @@
+import { defineConfig } from 'vitest/config'
+
+// Unit/component tests run under Vitest. End-to-end (e2e/**) is Playwright's job
+// (`npm run test:e2e`) and is excluded here so `npm test` stays fast.
+export default defineConfig({
+  test: {
+    include: ['__tests__/**/*.test.ts', 'src/**/*.test.ts'],
+    exclude: ['e2e/**', 'node_modules/**', '.next/**']
+  }
+})

@@ -1,0 +1,85 @@
+# agent-standard — the configurable paved path.
+# Only the `template/` subtree is rendered into a consumer repo; this file and the
+# repo's own docs/ and examples/ stay behind.
+_subdirectory: template
+_min_copier_version: "9.0.0"
+
+# ── what the developer is asked ──────────────────────────────────────────────
+
+project_name:
+  type: str
+  help: Project name (used in generated files and docs)
+  default: my-service
+
+language_stack:
+  type: str
+  help: Language + framework stack
+  choices:
+    "TypeScript — Node service (backend)": ts-node
+    "TypeScript — Next.js full-stack app": ts-next
+    "Python — FastAPI REST API": py-fastapi
+  default: ts-node
+
+architecture:
+  type: str
+  help: Architecture style
+  choices:
+    "Service-based — services with explicit contracts": service-based
+    "Clean / layered — domain-centric, dependency-inverted": clean-layered
+  default: service-based
+
+mode:
+  type: str
+  help: Greenfield scaffolds a project skeleton; adopt wires the standard into an existing repo
+  choices:
+    "Greenfield — scaffold the project skeleton": greenfield
+    "Adopt — no skeleton, wire the standard into an existing repo": adopt
+  default: greenfield
+
+gate:
+  type: str
+  help: Definition-of-done gate behaviour
+  choices:
+    "Strict — block work until the gate passes": strict
+    "Advisory — report only, never block": advisory
+  default: strict
+
+agents:
+  type: str
+  multiselect: true
+  help: Which agent tools to generate a rulebook for (ruler targets)
+  choices:
+    - claude
+    - codex
+    - copilot
+  default:
+    - claude
+    - codex
+    - copilot
+
+ci:
+  type: bool
+  help: Emit the required-check CI workflow (the hard enforcement boundary)?
+  default: true
+
+# ── derived / non-asked ──────────────────────────────────────────────────────
+
+_message_after_copy: |
+  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} · {{ architecture }}).
+
+  Next:
+    - review the generated files, then commit them
+  {% if mode == 'greenfield' %}  - install deps and run the tests to see the gate pass{% endif %}
+    - pull future standard updates with:  copier update --trust
+
+# Files that must never be rendered by Copier because another tool owns them.
+# ruler generates CLAUDE.md and AGENTS.md from .ruler/*; rendering them here would
+# clobber ruler's output on `copier update`.
+_exclude:
+  - "copier.yml"
+  - "~*"
+  - "__pycache__"
+  - ".git"
+  - ".DS_Store"
+  - "CLAUDE.md"
+  - "AGENTS.md"

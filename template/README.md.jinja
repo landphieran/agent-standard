@@ -1,0 +1,44 @@
+# {{ project_name }}
+
+Standardised with **agent-standard** — a paved path for agent-driven development.
+
+| Setting | Value |
+|---|---|
+| Stack | `{{ language_stack }}` |
+| Architecture | `{{ architecture }}` |
+| Mode | `{{ mode }}` |
+| Definition-of-done gate | `{{ gate }}` |
+| Agent rulebooks | {{ agents | join(', ') }} |
+| CI required check | {{ "yes" if ci else "no" }} |
+
+## What this repo carries
+
+- **Planning process** — OpenSpec (`openspec/`): every change starts as a spec, becomes
+  a plan and tasks, and is validated before it is archived.
+- **Agent rulebook** — one source in `.ruler/`, fanned out to {{ agents | join(', ') }}.
+- **Definition-of-done gate** — work is not "done" until the plan is satisfied and tests
+  exist in the right place, of the right type, and pass.
+{% if mode == 'greenfield' %}- **Project skeleton** — a {{ architecture }} layout for {{ language_stack }}.{% endif %}
+
+## Working here
+
+{% if language_stack == 'ts-node' or language_stack == 'ts-next' -%}
+```bash
+npm install
+npm test
+```
+{% elif language_stack == 'py-fastapi' -%}
+```bash
+uv sync
+uv run pytest
+```
+{% endif -%}
+
+The gate runs the same checks locally (a Claude Code stop hook) and{{ " " }}
+{%- if ci %}as a required CI check{% else %}— CI enforcement is disabled for this repo{% endif %}.
+
+## Updating the standard
+
+```bash
+copier update --trust
+```

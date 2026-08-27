@@ -83,3 +83,15 @@ _exclude:
   - ".DS_Store"
   - "CLAUDE.md"
   - "AGENTS.md"
+
+# Bootstrap the adopted tools after rendering. Requires Node on the machine.
+# NOTE: Copier runs tasks only with `--trust` (they execute shell commands).
+_tasks:
+  # OpenSpec: initialise once (on `copy`), then let `openspec update` handle upgrades.
+  # copilot -> github-copilot for OpenSpec's tool names.
+  - command: "npx --yes @fission-ai/openspec@1.11.0 init --tools {{ agents | map('replace', 'copilot', 'github-copilot') | join(',') }} --force --no-animation"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "npx --yes @fission-ai/openspec@1.11.0 update"
+    when: "{{ _copier_operation == 'update' }}"
+  # ruler: regenerate the per-agent rulebooks every time (fresh from .ruler/).
+  - "npx --yes @intellectronica/ruler@0.3.44 apply --agents {{ agents | join(',') }}"

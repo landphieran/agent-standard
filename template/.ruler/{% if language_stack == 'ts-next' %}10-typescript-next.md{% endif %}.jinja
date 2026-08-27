@@ -1,4 +1,48 @@
-# TypeScript + Next.js standards
+# TypeScript + Next.js (App Router) standards
 
 <!-- LANG:ts-next -->
-_(content filled from research)_
+The standard for this app: TypeScript strict, Next.js App Router (Server Components by
+default), Vitest + Playwright, typescript-eslint + Prettier. Enforced by review.
+
+## TypeScript baseline (applies to all code here)
+
+- `"strict": true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`. Never `// @ts-ignore`.
+- **Never `any`** — `unknown` + narrow (or a Zod/Valibot schema). No non-null `!`, no `as unknown as T`.
+- Discriminated unions over optional-flag soup; `as const` + `satisfies` for config; default to `readonly`.
+- `camelCase`/`PascalCase`/`UPPER_SNAKE_CASE`; `kebab-case` files; **named exports**; no `I`-prefixed interfaces.
+- Catch as `unknown` and narrow; custom `Error` subclasses with `{ cause }`; never swallow errors. **No floating promises**; `async`/`await` over `.then()`.
+- typescript-eslint flat config with **typed linting** + Prettier. Do not adopt Airbnb's config.
+
+## Server vs Client Components
+
+- **Default to Server Components.** Fetch data, read secrets, and render on the server unless you specifically need the client.
+- Add `"use client"` only for state/effects, event handlers, or browser APIs (`window`, `localStorage`). Push it to small **leaf** components — a client file pulls all its imports into the client bundle.
+- Interleave by passing Server Components as `children`/props into Client Components (keeps server content out of the client bundle).
+- Never leak secrets: only `NEXT_PUBLIC_`-prefixed env reaches the browser. Mark server-only modules with `import 'server-only'`. Pass minimal serializable DTOs to client components, never whole DB records.
+- Render context providers deep (wrap `{children}`), not at the root.
+
+## Data fetching, mutations & caching
+
+- Fetch in Server Components with `async`/`await` (ORM/DB client or `fetch`). Never fetch your own Route Handlers from a Server Component — call the data layer directly.
+- Avoid request waterfalls: fire independent requests together with `Promise.all`; only sequence when one truly feeds the next, and wrap the dependent part in `<Suspense>` to stream.
+- Dedupe non-`fetch` reads with `React.cache`. Note `fetch` is **not** cached by default (Next 15+) — opt in deliberately, and know whether the project uses Cache Components (`use cache` + `cacheLife` + `cacheTag`) or the previous model (`revalidatePath`/`revalidateTag`). Don't mix mental models.
+- Mutations go through **Server Actions** (`"use server"`), invoked from `<form action>` or `useActionState`.
+- In **every** Server Action: re-check authentication AND authorization (an exported action is a reachable POST endpoint — prevent IDOR), validate all input with a schema, and return only a minimal DTO. Never mutate during render.
+- After a successful mutation, `revalidatePath`/`revalidateTag` then `redirect()`. Use `useOptimistic` for optimistic UI.
+
+## Route Handlers vs Server Actions
+
+- Human-triggered from your own UI → **Server Action**. Machine/external caller (public REST, webhooks, OAuth, GET endpoints, streaming) → **Route Handler** (`route.ts`).
+
+## Files, rendering, performance
+
+- Use the App Router special files for their purpose (`page`, `layout`, `loading`, `error` [client], `not-found`, `route`). Colocate route-specific components/hooks/tests in the route folder; private `_folders`, route groups `(group)`. Use `src/` with `src/lib`, `src/components`, and a data-access layer.
+- Stream with `loading.tsx` + `<Suspense>` (meaningful skeletons, not bare spinners); keep runtime data (`cookies()`, `headers()`, `searchParams`) behind Suspense and deep in the tree. Static by default; opt into dynamic only where needed.
+- Metadata via the Metadata API. Use `next/image` and `next/font` — never raw `<img>` for content images or external font `<link>`. Code-split heavy client widgets with `next/dynamic`.
+
+## Testing
+
+- **Vitest + React Testing Library** for synchronous Server/Client components; query by role/label, not test IDs.
+- **Do not unit-test async Server Components with Vitest** (unsupported) — cover those with **Playwright** e2e, along with data-fetch flows and Server Action mutations.
+
+Directory layout for this project: see `ARCHITECTURE.md` and the architecture standards below.

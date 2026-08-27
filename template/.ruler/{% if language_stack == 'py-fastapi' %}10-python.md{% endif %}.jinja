@@ -1,4 +1,61 @@
 # Python + FastAPI standards
 
 <!-- LANG:python -->
-_(content filled from research)_
+The standard for this service: Python 3.11+, FastAPI, Pydantic v2, `uv`, Ruff. These are
+enforced by review; the DoD gate only checks that tests exist and pass. Follow every rule
+unless the existing code already encodes a deliberate, conflicting choice.
+
+## Language
+
+- Follow PEP 8; let **Ruff** format and lint — never hand-fight the formatter. Line length 88.
+- `snake_case` for modules/functions/vars, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants.
+- PEP 257 docstrings on every public module/class/function (imperative, one-line summary first). Skip trivial private helpers.
+- Use f-strings — except logging, which uses `logger.info("x=%s", x)` (lazy formatting).
+- Use `pathlib.Path` for filesystem paths, never `os.path.join` or string concatenation.
+- Prefer comprehensions/generators; drop to an explicit loop once a comprehension needs two `for`s + a condition.
+- Prefer EAFP (try/except the specific error) over pre-checking with `if key in d`.
+
+## Typing
+
+- Annotate every signature and class/module attribute. Untyped `def` is not acceptable in new code.
+- Use `X | Y` and `X | None` (never `Optional`/`Union`). Use `Protocol` for structural "shape" contracts, `TypedDict` for fixed-key dict payloads.
+- **Never** add `from __future__ import annotations` to modules with Pydantic models, routes, or `Depends` — FastAPI/Pydantic evaluate annotations at runtime.
+- Ban `Any` except at genuinely dynamic boundaries, with a justifying comment. Reach for `object`, a `Protocol`, `TypedDict`, or a `TypeVar` first.
+- Pydantic models at every trust boundary (requests, responses, settings, external data); `@dataclass(frozen=True)` for pure internal containers.
+
+## Errors
+
+- Define a domain exception hierarchy rooted in one base (`class AppError(Exception)`). Raise these in business logic — never `HTTPException` deep in the domain.
+- Never `except:` or broad `except Exception` without re-raising. Catch the narrowest exception you can handle.
+- Chain with `raise NewError(...) from err` when translating; `from None` only to deliberately suppress.
+- Raise for exceptional/invalid states; return values (incl. `None`) for normal outcomes.
+
+## FastAPI
+
+- Structure by **domain**, not by file type: each domain package holds `router.py`, `schemas.py`, `service.py`, `dependencies.py`, `exceptions.py` — not global `routers/`, `models/` folders.
+- One `APIRouter` per domain with `prefix` + `tags`; version at the prefix (`/api/v1`).
+- Every path operation declares `response_model` (or typed return), explicit `status_code`, and `responses` for alternates.
+- Separate request/response models (`XCreate`, `XUpdate`, `XRead`) — never expose the ORM model or accept the read model as input. Validate with Pydantic `Field`/validators, not hand-written `if`s.
+- Inject with `Annotated[T, Depends(...)]`; alias reusable deps (`CurrentUser = Annotated[User, Depends(get_current_user)]`). Put shared validation/loading in dependencies (per-request cached).
+- `async def` **only** when the body awaits non-blocking I/O; plain `def` for blocking/CPU work (FastAPI threadpools it). **Never** call blocking I/O inside `async def` — offload with `run_in_threadpool`/`asyncio.to_thread`, or a task queue for CPU work.
+- Startup/shutdown via the `lifespan` context manager, not deprecated `@app.on_event`.
+- Config through a Pydantic-Settings class (`SettingsConfigDict`), env/`.env`, cached with `lru_cache`. Never scatter `os.getenv`.
+- Register exception handlers that map domain exceptions to a stable JSON error shape (`{"detail", "code"}`) with correct status; keep routes thin.
+- Paginate every growable list endpoint (`limit` capped > 0, `offset` >= 0) via a shared pagination dependency.
+
+## Testing
+
+- `pytest`; files `test_*.py`, fixtures in `conftest.py`. Split unit vs integration (mark `@pytest.mark.integration`); unit mocks external I/O.
+- Test the API via `httpx.AsyncClient(transport=ASGITransport(app=app))` with `pytest-asyncio`. Swap collaborators with `app.dependency_overrides`, never monkeypatching internals.
+
+## Tooling & structure
+
+- `uv` for env + deps (`uv add`, `uv run`, commit `uv.lock`). **Ruff** as the single lint+format tool (replaces Black/isort/flake8). Type-check with `mypy --strict` (or strict `pyright`) in CI. All tool config in `pyproject.toml`.
+- `src/` layout; absolute imports; minimal `__init__.py`. Break circular imports by refactoring or `if TYPE_CHECKING:`, not deferred function-level imports.
+
+## Security
+
+- Validate all external input with Pydantic at the boundary; don't re-trust it downstream.
+- Secrets from env only, typed `SecretStr`, never logged. CORS: explicit origin allowlist, never `["*"]` with credentials. Set timeouts on every outbound call. Disable docs/OpenAPI in prod unless deliberately exposed.
+
+Directory layout for this project: see `ARCHITECTURE.md` and the architecture standards below.

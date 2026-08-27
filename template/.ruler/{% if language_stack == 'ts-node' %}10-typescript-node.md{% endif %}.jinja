@@ -1,4 +1,50 @@
 # TypeScript (Node service) standards
 
 <!-- LANG:ts-node -->
-_(content filled from research)_
+The standard for this service: TypeScript in strict mode, ESM, Vitest, typescript-eslint +
+Prettier. Enforced by review; the DoD gate only checks tests exist and pass.
+
+## tsconfig / strictness
+
+- `"strict": true` is the baseline. Additionally enable `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`, `noUnusedLocals`, `noUnusedParameters`.
+- ESM: `"type": "module"` + `"module"`/`"moduleResolution": "nodenext"`; relative imports carry the `.js` extension. `target`/`lib` match the Node LTS (es2022+), not es5.
+- Enable `"verbatimModuleSyntax": true` (type-only imports must be `import type`), `"isolatedModules": true`, `"moduleDetection": "force"`, `"skipLibCheck": true`.
+- Never silence errors with `// @ts-nocheck`/`// @ts-ignore` or by loosening config — fix the types.
+
+## Type discipline
+
+- **Never `any`.** Use `unknown` at boundaries and narrow (type guards, `typeof`/`instanceof`, or a Zod/Valibot schema) before use.
+- Never use the non-null assertion `!` or `as unknown as T`. The only acceptable `as` is narrowing `unknown` → `T` after runtime validation.
+- Model states as discriminated unions (a shared literal `kind`/`status`), not optional-flag soup; enforce `switch-exhaustiveness-check`.
+- Use `as const` for literal config/tuples; use `satisfies` to validate a value against a type without widening it.
+- Default to `readonly` (`readonly` props, `readonly T[]` on inputs).
+- `interface` for object/class shapes you expose, `type` for unions/intersections/mapped/utility — pick one convention and apply it consistently.
+
+## Naming & style
+
+- `camelCase` vars/functions, `PascalCase` types/classes/enums, `UPPER_SNAKE_CASE` only for true constants/env keys.
+- Do not prefix interfaces with `I` or suffix types with `T`.
+- Files `kebab-case`, named after their primary export. Prefer **named exports**; do not mix default + named in one module. Order imports builtin → external → internal alias → relative and automate it.
+- Do not adopt Airbnb's config (dated); use typescript-eslint's shared configs as the source of truth.
+
+## Errors & async
+
+- Treat the `catch` binding as `unknown`; narrow before use (`if (err instanceof Error)`).
+- Define custom `Error` subclasses with a stable `readonly code`; attach the original via `{ cause: err }`. Discriminate on `code`, never message matching.
+- Never swallow errors (no empty `catch {}`); handle meaningfully or rethrow with context. Log once per failure.
+- `async`/`await`, never raw `.then()` chains. **No floating promises** — every promise is awaited, returned, or explicitly `void`ed (enforce `no-floating-promises`, `no-misused-promises`). Run independent work with `Promise.all`.
+- Use a typed `Result` (`{ ok: true, value } | { ok: false, error }` or `neverthrow`) for expected/recoverable outcomes at boundaries; reserve `throw` for programmer errors and truly exceptional conditions.
+
+## Tooling
+
+- **typescript-eslint (flat config, ESLint 9) + Prettier.** Enable **typed linting** (`strictTypeChecked` + `stylisticTypeChecked`, `parserOptions.projectService: true`). Prettier owns formatting, ESLint owns correctness — don't duplicate.
+- High-value rules beyond presets: `no-floating-promises`, `no-misused-promises`, `await-thenable`, `no-explicit-any`, the `no-unsafe-*` family, `no-unnecessary-condition`, `switch-exhaustiveness-check`, `consistent-type-imports`, `prefer-nullish-coalescing`, `prefer-optional-chain`.
+- Biome is acceptable only when speed/simplicity outweighs full type-aware coverage; never run two linters over the same files.
+
+## Structure & testing
+
+- One-way dependency direction: business logic must not import infrastructure (db/http/framework); infrastructure depends inward.
+- Do not use barrel `index.ts` re-export files inside app code (slow builds, circular imports, breaks tree-shaking); import from the defining module. Use tsconfig path aliases (`@/…`) instead of deep `../../..`.
+- **Vitest**: colocate fast unit tests (`x.ts` + `x.test.ts`); integration tests in `tests/integration` as a separate project. Import test globals explicitly (`import { describe, it, expect } from 'vitest'`). Mock only real boundaries (network, fs, clock) via DI, not internal modules; `restoreMocks: true`. Test behavior, not implementation.
+
+Directory layout for this project: see `ARCHITECTURE.md` and the architecture standards below.

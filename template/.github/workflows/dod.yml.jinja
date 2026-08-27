@@ -1,0 +1,31 @@
+name: definition-of-done
+# The hard enforcement boundary. The local Claude Code stop hook is fast feedback
+# and is bypassable; this required check is what actually holds the line. Make it a
+# required status check on the protected branch.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
+jobs:
+  dod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+{%- if language_stack in ['ts-node', 'ts-next'] %}
+      - run: npm ci
+{%- elif language_stack == 'py-fastapi' %}
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras --dev
+{%- endif %}
+      - name: definition-of-done gate
+        run: >
+          node .claude/hooks/dod.mjs --ci
+          --base "origin/{% raw %}${{ github.base_ref || 'main' }}{% endraw %}"
+          --head HEAD

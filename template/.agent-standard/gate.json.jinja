@@ -1,0 +1,23 @@
+{
+  "mode": "{{ gate }}",
+{%- if language_stack == 'ts-node' %}
+  "sourceGlobs": ["src/**/*.ts"],
+  "unitTestGlobs": ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
+  "integrationTestGlobs": ["tests/integration/**/*.test.ts", "src/**/*.integration.test.ts"],
+  "unitCommand": "npm run test:unit",
+  "fullCommand": "npm test",
+{%- elif language_stack == 'ts-next' %}
+  "sourceGlobs": ["app/**/*.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts"],
+  "unitTestGlobs": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
+  "integrationTestGlobs": ["e2e/**/*.spec.ts", "tests/integration/**"],
+  "unitCommand": "npm run test:unit",
+  "fullCommand": "npm test",
+{%- elif language_stack == 'py-fastapi' %}
+  "sourceGlobs": ["src/**/*.py", "app/**/*.py"],
+  "unitTestGlobs": ["tests/unit/**/*.py"],
+  "integrationTestGlobs": ["tests/integration/**/*.py"],
+  "unitCommand": "uv run pytest tests/unit -q",
+  "fullCommand": "uv run pytest -q",
+{%- endif %}
+  "openspec": true
+}

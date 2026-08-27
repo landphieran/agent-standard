@@ -1,0 +1,9 @@
+// Unit test — colocated with the code it covers (the TS convention).
+import { describe, it, expect } from 'vitest'
+import { healthStatus } from './health.js'
+
+describe('healthStatus', () => {
+  it('reports ok', () => {
+    expect(healthStatus().status).toBe('ok')
+  })
+})

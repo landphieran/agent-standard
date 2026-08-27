@@ -1,0 +1,9 @@
+// Health capability — pure logic, unit-testable without the transport.
+export interface Health {
+  status: 'ok'
+  service: string
+}
+
+export function healthStatus (): Health {
+  return { status: 'ok', service: '{{ project_name }}' }
+}

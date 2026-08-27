@@ -1,0 +1,10 @@
+// Integration test — exercises the wired capability. Lives under tests/integration/.
+import { describe, it, expect } from 'vitest'
+import { healthStatus } from '../../src/health.js'
+
+describe('health (integration)', () => {
+  it('returns a well-formed payload', () => {
+    const payload = healthStatus()
+    expect(payload).toEqual({ status: 'ok', service: '{{ project_name }}' })
+  })
+})

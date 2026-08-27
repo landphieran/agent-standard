@@ -1,4 +1,68 @@
 # Clean / layered architecture standards
 
 <!-- ARCH:clean-layered -->
-_(content filled from research; language-concretized for {{ language_stack }})_
+This project uses **clean/layered architecture**. The one rule everything else serves:
+**dependencies point inward.** Outer layers may depend on inner layers; an inner layer
+must never import an outer one. The framework is a detail at the edge, not the center.
+
+## Layers and the dependency rule
+
+{% if language_stack == 'py-fastapi' -%}
+Layout under `src/{{ pkg }}/`:
+
+| Layer | Directory | May import | MUST NOT import |
+|---|---|---|---|
+| Domain | `domain/` | stdlib only | `fastapi`, `pydantic` models used as adapters, `application/`, `adapters/`, any DB/HTTP client |
+| Application (use cases) | `application/` | `domain/` | `fastapi`, `adapters/`, DB/HTTP clients |
+| Adapters | `adapters/` | `application/`, `domain/`, frameworks | — |
+| Composition root | `main.py` | everything (wires it together) | — |
+
+- The **domain** is plain Python (`@dataclass`, pure functions, `Protocol` for ports). It must import **no framework** — a grep for `import fastapi` or `import sqlalchemy` under `domain/` is a violation.
+- Use cases in `application/` orchestrate the domain and depend on **ports** (Protocols) defined in the domain; concrete adapters (DB repo, HTTP client) implement those ports and are injected at `main.py` (dependency inversion).
+- Pydantic request/response models are **adapter** concerns — they live in `adapters/` and are mapped to/from domain objects at the boundary. The domain never speaks Pydantic.
+{% elif language_stack == 'ts-next' -%}
+Layout: `src/domain/`, `src/application/`, and the Next.js `app/` (routes, Server Actions) as the adapter layer; `src/lib/` for the data-access layer.
+
+| Layer | Location | May import | MUST NOT import |
+|---|---|---|---|
+| Domain | `src/domain/` | nothing framework | `next/*`, `react`, `src/application/`, `app/`, any db/http client |
+| Application (use cases) | `src/application/` | `src/domain/` | `next/*`, `react`, `app/`, db/http clients |
+| Adapters | `app/**` (routes, actions), `src/lib/` | application, domain, framework | — |
+
+- The **domain** is framework-free TypeScript — no `next/*`, no `react`, no DB client. Server Components and Server Actions are **adapters**: they call use cases, they don't contain business rules.
+- Use cases depend on **ports** (interfaces) implemented by adapters and injected at the route/action boundary.
+{% else -%}
+Layout under `src/`:
+
+| Layer | Directory | May import | MUST NOT import |
+|---|---|---|---|
+| Domain | `src/domain/` | nothing framework | any npm framework/db/http package, `src/application/`, `src/adapters/` |
+| Application (use cases) | `src/application/` | `src/domain/` | `src/adapters/`, frameworks, db/http clients |
+| Adapters | `src/adapters/` | application, domain, frameworks | — |
+| Composition root | `src/index.ts` | everything | — |
+
+- The **domain** is plain TypeScript — no framework, transport, or persistence imports. A domain module importing from `src/adapters/` or an npm framework package is a violation.
+- Use cases depend on **ports** (interfaces) defined near the domain; concrete adapters implement them and are injected at `src/index.ts` (dependency inversion).
+{% endif %}
+## DTOs vs domain entities
+
+- **Domain entities** carry business rules and identity; they live in the domain and are never serialized directly to the outside.
+- **DTOs** (request/response shapes) live in the adapter layer and are mapped to/from entities at the boundary. Do not let a transport/DB shape leak inward.
+
+## Domain modeling & enforcement
+
+- Entities carry **behavior** — invariants enforced as methods on the entity/aggregate root, not left to callers (avoid the anemic model). Model identity-less immutable concepts as value objects.
+- Repository **interfaces** are declared in the domain; **implementations** live in the adapter layer (one repository per aggregate root, not per table).
+- The dependency rule is worth **hard-gating**: add an arch-test in CI — {% if language_stack == 'py-fastapi' %}`import-linter` (`importlinter` contracts in `pyproject.toml`){% else %}`dependency-cruiser` (a forbidden rule: `from ^src/domain` → `to ^src/(adapters|application)` is an error){% endif %} — that fails the build when an inner layer imports an outer one. The rules above are advisory; the arch-test is the enforcement.
+
+## Testing per layer
+
+- Domain + application: **unit** tests, no I/O, no framework — this is where most tests live.
+- Adapters + the wired app: **integration** tests.
+- If the domain is hard to test without spinning up the framework, the dependency rule has been broken — fix the import direction, don't mock around it.
+
+{% if mode == 'greenfield' -%}
+See `ARCHITECTURE.md` for the concrete directory tree.
+{%- else -%}
+Apply this layering to new code and refactor toward it; keep the domain framework-free from here on.
+{%- endif %}

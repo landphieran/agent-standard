@@ -1,4 +1,55 @@
 # Service-based architecture standards
 
 <!-- ARCH:service-based -->
-_(content filled from research; language-concretized for {{ language_stack }})_
+This project uses **service-based architecture**: the codebase is organised into services,
+each owning one business capability behind an explicit contract. Default to a modular
+monolith — extract a separately deployable service only when independent scaling or team
+autonomy genuinely demands it.
+
+## Boundaries
+
+- One service = **one business capability / bounded context**. Organise by capability, not by technical layer — no "controllers" service and "models" service; each service owns its feature vertically.
+- High cohesion within a service, low coupling between services. If two services must talk constantly to complete one operation, the boundary is wrong — merge them.
+- The service dependency graph MUST be acyclic.
+
+{% if language_stack == 'py-fastapi' -%}
+Layout under `src/{{ pkg }}/`, one package per service:
+```
+src/{{ pkg }}/<service>/  router.py  schemas.py  service.py  dependencies.py  exceptions.py
+```
+- `service.py` is the capability's public entry point; other services call it — never import another service's `service.py` internals, models, or DB tables directly.
+- `schemas.py` (Pydantic) is the **contract** at the edge.
+{% elif language_stack == 'ts-next' -%}
+Layout: `src/services/<service>/` for each capability's logic; `app/**` routes and Server Actions are the service entry points; `src/contracts/` holds the DTOs.
+- A route/action calls its service's public function; one service never imports another service's internal modules.
+{% else -%}
+Layout: `src/services/<service>/` (each with an `index.ts` public interface) and `src/contracts/` (DTOs).
+- Import another service only through its public `index.ts`; never reach into its internal files.
+{% endif %}
+## Data ownership
+
+- Each service **exclusively owns its persistence**. No shared database or cross-service table access. To read another service's data, call its public interface — do not query its tables.
+- Reference other services' entities by **identity (ID)**, not by embedding their objects. Keep transactions within one service; use eventual consistency across boundaries.
+
+## Contracts & DTOs at the edge
+
+- Every service exposes an **explicit contract** ({% if language_stack == 'py-fastapi' %}Pydantic request/response schemas{% else %}DTO types, validated with Zod/Valibot{% endif %}) and hides all internals behind it.
+- Cross-boundary data travels as **dedicated DTOs**, never internal domain or persistence models — map at the edge so internal refactors don't break the contract.
+- Be a **tolerant reader**: read only the fields you use, ignore unknown ones. Contract changes must be backward-compatible; a breaking change needs a new version.
+- When integrating a foreign/legacy model, put an **anti-corruption layer** at the boundary that translates it — never let a foreign schema leak inward.
+
+## Validation, errors, state
+
+- Validate and sanitise all inbound data **at the service edge**, before it reaches business logic. Enforce each invariant **inside the owning service** — never delegate a rule to callers.
+- Use one standard machine-readable error shape across boundaries ({% if language_stack == 'py-fastapi' %}RFC 9457 `application/problem+json`: `type`/`title`/`status`/`detail`{% else %}a shared `{ type, title, status, detail }` problem shape (RFC 9457){% endif %}). Never leak stack traces or internal identifiers across a boundary.
+- Keep services **stateless** — no per-client state in instance memory between requests; persist it in a store.
+
+## Testing
+
+- Unit-test each service's logic in isolation (mock its collaborators at the contract). Integration-test the service through its public edge (HTTP/handler). Test the contract itself with consumer-driven contract tests when another service depends on it.
+
+{% if mode == 'greenfield' -%}
+See `ARCHITECTURE.md` for the concrete directory tree.
+{%- else -%}
+Apply these boundaries to new code and refactor toward them; do not add cross-service internal imports from here on.
+{%- endif %}

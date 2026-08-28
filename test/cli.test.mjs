@@ -63,6 +63,32 @@ test('npm and uv toolchains pass the minimum-standard preflight', t => {
   assert.doesNotThrow(() => assertSupportedToolchain(uvRoot, 'py-fastapi'))
 })
 
+const BIN = join(REPO, 'bin', 'agent-standard.mjs')
+
+test('verify fails with a clear error outside an agent-standard repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-verify-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'verify', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /not an agent-standard repository/)
+})
+
+test('update requires a Git repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-update-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'update', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /Git repository/)
+})
+
+test('help lists the update, verify, and doctor verbs', () => {
+  const r = spawnSync(process.execPath, [BIN, '--help'], { encoding: 'utf8' })
+  assert.equal(r.status, 0)
+  for (const verb of ['agent-standard init', 'agent-standard update', 'agent-standard verify', 'agent-standard doctor']) {
+    assert.match(r.stdout, new RegExp(verb.replace(/[-]/g, '\\$&')))
+  }
+})
+
 test('the npm-installed bin entry point executes through its package shim', () => {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const result = spawnSync(npm, ['exec', '--yes', '--package=.', '--', 'agent-standard', '--help'], {

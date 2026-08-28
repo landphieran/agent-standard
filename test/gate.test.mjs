@@ -180,6 +180,23 @@ test('CI refs are passed to git as arguments, not executed by a shell', () => {
   cleanup(d)
 })
 
+test('CI mode — a source file that only advanced on the base branch is not attributed to the PR', () => {
+  const d = makeRepo()
+  const git = a => execFileSync('git', a, { cwd: d, stdio: 'ignore' })
+  const rev = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  const forkPoint = rev()
+  // The base branch advances with an unrelated, untested source file.
+  write(d, 'src/other.ts'); git(['add', '-A']); git(['commit', '-qm', 'base advances src/other.ts'])
+  const baseTip = rev()
+  // The PR branches from the fork point and changes only docs.
+  git(['checkout', '-q', '-b', 'feature', forkPoint])
+  write(d, 'docs/notes.md', '# notes\n'); git(['add', '-A']); git(['commit', '-qm', 'docs only'])
+  // Evaluated against the current base tip, as GitHub passes pull_request.base.sha.
+  const r = runCI(d, baseTip)
+  assert.equal(r.code, 0, r.stdout || r.stderr) // two-dot would misattribute src/other.ts and block
+  cleanup(d)
+})
+
 test('CI policy-only mode does not execute the full command twice', () => {
   const d = makeRepo({
     ...GATE_CFG,

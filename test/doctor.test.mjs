@@ -136,6 +136,54 @@ test('adoption setup preserves legacy governed docs and defers normalization to 
   assert.match(normal.stdout, /docs\/testing\.md is missing governance frontmatter/)
 })
 
+test('adoption defers, then enforces, gate commands whose npm scripts are absent', t => {
+  const root = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const adopted = manifest()
+  adopted.project.mode = 'adopt'
+  adopted.conformance.status = 'adopting'
+  write(root, '.agent-standard/manifest.json', JSON.stringify(adopted))
+  write(root, '.agent-standard/gate.json', JSON.stringify({
+    mode: 'strict',
+    waiversFile: '.agent-standard/waivers.json',
+    openspec: false,
+    doctorCommand: 'node .agent-standard/scripts/doctor.mjs',
+    unitCommand: 'npm run test:unit',
+    fullCommand: 'npm run verify:code'
+  }))
+  write(root, 'package.json', JSON.stringify({ name: 'legacy', scripts: { build: 'tsc' } }))
+
+  // Setup: an actionable advisory on stderr, but bootstrap is not failed.
+  const setup = runDoctor(root, '--setup')
+  assert.equal(setup.status, 0, `${setup.stderr}\n${setup.stdout}`)
+  assert.match(setup.stderr, /\[agent-standard setup\][\s\S]*npm run test:unit/)
+
+  // Normal verification: the unmapped command becomes a blocking finding.
+  const normal = runDoctor(root)
+  assert.equal(normal.status, 1)
+  assert.match(normal.stdout, /gate\.unitCommand runs[\s\S]*npm run test:unit/)
+})
+
+test('doctor flags a managed skill copy left behind after removal, but not a team-added skill', t => {
+  const root = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+
+  // Tracker records a skill no longer in .ruler/skills whose copy still exists.
+  write(root, '.agent-standard/managed-skills.json', JSON.stringify({ skills: ['example', 'gone'], targets: ['.agents/skills'] }))
+  write(root, '.agents/skills/gone/SKILL.md', '---\nname: gone\ndescription: Removed skill.\n---\n')
+  const stale = runDoctor(root, '--setup')
+  assert.equal(stale.status, 1)
+  assert.match(stale.stdout, /\.agents\/skills\/gone\/SKILL\.md is an orphaned standard skill/)
+
+  // A skill present in source (even if not in manifest.skills) is not an orphan.
+  write(root, '.agent-standard/managed-skills.json', JSON.stringify({ skills: ['example', 'custom'], targets: ['.agents/skills'] }))
+  write(root, '.ruler/skills/custom/SKILL.md', '---\nname: custom\ndescription: Team skill.\n---\n')
+  write(root, '.agents/skills/custom/SKILL.md', '---\nname: custom\ndescription: Team skill.\n---\n')
+  rmSync(join(root, '.agents/skills/gone'), { recursive: true, force: true })
+  const clean = runDoctor(root, '--setup')
+  assert.equal(clean.status, 0, `${clean.stderr}\n${clean.stdout}`)
+})
+
 test('spec-driven validation requires an OpenSpec artifact for each selected client', t => {
   const root = fixture('spec-driven')
   t.after(() => rmSync(root, { recursive: true, force: true }))

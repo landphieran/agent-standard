@@ -1,148 +1,142 @@
 #!/usr/bin/env node
 /**
- * agent-standard — definition-of-done gate.
- *
- * One script, two entry points that must reach the SAME verdict:
- *   - Claude Code Stop hook (local, default): reads the hook JSON on stdin and,
- *     in strict mode, blocks the model from stopping via {"decision":"block"}.
- *   - CI (`--ci`): compares a base..head range and exits non-zero on any finding,
- *     which is what actually enforces the standard (the local hook is bypassable).
- *
- * It reads `.agent-standard/gate.json` for the stack's globs and commands, so the
- * logic here is stack-agnostic — the conventions are data, not code.
- *
- * Design rules (see docs/architecture.md):
- *   - It must pass trivially when there is nothing to check (clean tree, docs-only
- *     change, or a freshly rendered repo). Enforcement only kicks in once source
- *     changed.
- *   - Local runs check unit tests only (fast — a slow hook gets disabled); CI runs
- *     the full suite.
- *   - `advisory` mode never blocks; it reports and exits 0.
+ * Cross-client definition-of-done gate. Claude invokes it as a Stop hook; CI
+ * invokes the same file with --ci. Configuration is data in gate.json.
  */
-import { execSync } from 'node:child_process'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const args = process.argv.slice(2)
 const isCI = args.includes('--ci')
-const root = process.env.CLAUDE_PROJECT_DIR || process.cwd()
-const argVal = flag => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null }
+const root = process.env.CLAUDE_PROJECT_DIR || process.env.AGENT_STANDARD_ROOT || process.cwd()
+const argValue = flag => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : null }
 
-function sh (cmd) {
-  return execSync(cmd, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+function git (gitArgs) {
+  return execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 }
-function shOk (cmd) { try { sh(cmd); return true } catch { return false } }
 
-/** Minimal path-aware glob → RegExp: supports **, *, ?. Zero deps on purpose. */
-function globToRe (glob) {
-  let re = '^'
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]
-    if (c === '*') {
-      if (glob[i + 1] === '*') {
-        if (glob[i + 2] === '/') { re += '(?:[^/]*/)*'; i += 2 } else { re += '.*'; i += 1 }
-      } else re += '[^/]*'
-    } else if (c === '?') re += '[^/]'
-    else if ('.+^${}()|[]\\'.includes(c)) re += '\\' + c
-    else re += c
+function gitOk (gitArgs) {
+  try { git(gitArgs); return true } catch { return false }
+}
+
+function commandOk (command) {
+  const result = spawnSync(command, { cwd: root, shell: true, stdio: 'inherit' })
+  return result.status === 0
+}
+
+function globToRegExp (glob) {
+  let expression = '^'
+  for (let index = 0; index < glob.length; index++) {
+    const char = glob[index]
+    if (char === '*') {
+      if (glob[index + 1] === '*') {
+        if (glob[index + 2] === '/') { expression += '(?:[^/]*/)*'; index += 2 } else { expression += '.*'; index++ }
+      } else expression += '[^/]*'
+    } else if (char === '?') expression += '[^/]'
+    else if ('.+^${}()|[]\\'.includes(char)) expression += `\\${char}`
+    else expression += char
   }
-  return new RegExp(re + '$')
+  return new RegExp(`${expression}$`)
 }
-const matchesAny = (path, globs) => (globs || []).some(g => globToRe(g).test(path))
 
-/** Files changed in the range under scrutiny (normalised to forward slashes). */
+const matchesAny = (path, globs = []) => globs.some(glob => globToRegExp(glob).test(path))
+const normalise = text => text.split('\n').map(value => value.trim().replace(/\\/g, '/')).filter(Boolean)
+
+function usableBase (candidate, head) {
+  if (!candidate || /^0+$/.test(candidate) || !gitOk(['cat-file', '-e', `${candidate}^{commit}`])) {
+    try { return git(['rev-list', '--max-parents=0', head]).split('\n')[0] } catch { return null }
+  }
+  return candidate
+}
+
+function range () {
+  const head = argValue('--head') || process.env.DOD_HEAD || 'HEAD'
+  const base = usableBase(argValue('--base') || process.env.DOD_BASE || 'origin/main', head)
+  return { base, head }
+}
+
 function changedFiles () {
-  // Not a git repo, or no commit yet → nothing we can compare against; do not block.
-  if (!shOk('git rev-parse --is-inside-work-tree')) return null
-  let out
+  if (!gitOk(['rev-parse', '--is-inside-work-tree'])) return null
   if (isCI) {
-    const base = argVal('--base') || process.env.DOD_BASE || 'origin/main'
-    const head = argVal('--head') || process.env.DOD_HEAD || 'HEAD'
-    out = [sh(`git diff --name-only ${base} ${head}`)]
-  } else {
-    if (!shOk('git rev-parse HEAD')) return null // repo with no commits yet
-    // local: working tree + staged vs HEAD, plus new untracked files
-    out = [sh('git diff --name-only HEAD'), sh('git ls-files --others --exclude-standard')]
+    const { base, head } = range()
+    if (!base) return null
+    return [...new Set(normalise(git(['diff', '--name-only', base, head])))]
   }
-  return [...new Set(out.join('\n').split('\n').map(s => s.trim().replace(/\\/g, '/')).filter(Boolean))]
+  if (!gitOk(['rev-parse', 'HEAD'])) return null
+  return [...new Set([...normalise(git(['diff', '--name-only', 'HEAD'])), ...normalise(git(['ls-files', '--others', '--exclude-standard']))])]
 }
 
-const isTestPath = f => /(\.test\.|\.spec\.|(^|\/)test_[^/]*\.py$|_test\.py$)/.test(f)
+const isTestPath = path => /(\.test\.|\.spec\.|(^|\/)test_[^/]*\.py$|_test\.py$)/.test(path)
 
-/** True if a commit under scrutiny opts out of the test requirement. */
-function hasSkipTrailer () {
+function activeWaiver (cfg, source) {
+  const path = resolve(root, cfg.waiversFile || '.agent-standard/waivers.json')
+  if (!existsSync(path)) return false
   try {
-    const range = isCI
-      ? `${argVal('--base') || process.env.DOD_BASE || 'origin/main'}..${argVal('--head') || process.env.DOD_HEAD || 'HEAD'}`
-      : '-1'
-    return /no-tests-needed/i.test(sh(`git log --format=%B ${range}`))
+    const entries = JSON.parse(readFileSync(path, 'utf8')).noTests || []
+    return entries.some(entry => {
+      const complete = entry.id && entry.owner && entry.reason && entry.expires && Array.isArray(entry.paths)
+      const current = Date.parse(entry.expires) >= Date.now()
+      return complete && current && source.every(file => matchesAny(file, entry.paths))
+    })
   } catch { return false }
 }
 
+function baselineFindings (cfg) {
+  const findings = []
+  if (cfg.doctorCommand && !commandOk(cfg.doctorCommand)) findings.push(`Repository conformance failed: \`${cfg.doctorCommand}\`.`)
+  return findings
+}
+
 function main () {
-  // Loop guard: Claude re-invokes the Stop hook after a block; never re-block.
   if (!isCI) {
     const stdin = (() => { try { return readFileSync(0, 'utf8') } catch { return '' } })()
-    if (stdin) { try { if (JSON.parse(stdin).stop_hook_active) return 0 } catch { /* ignore */ } }
+    if (stdin) { try { if (JSON.parse(stdin).stop_hook_active) return 0 } catch { /* malformed hook input is ignored */ } }
   }
 
-  const cfgPath = resolve(root, '.agent-standard/gate.json')
-  if (!existsSync(cfgPath)) return 0 // not configured here → do nothing
-  const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'))
+  const configPath = resolve(root, '.agent-standard/gate.json')
+  if (!existsSync(configPath)) return 0
+  const cfg = JSON.parse(readFileSync(configPath, 'utf8'))
   const mode = cfg.mode || 'strict'
-
+  const findings = isCI ? baselineFindings(cfg) : []
   const changed = changedFiles()
-  if (changed === null) return 0 // no git history to compare against → nothing to gate
-  const source = changed.filter(f => matchesAny(f, cfg.sourceGlobs) && !isTestPath(f) &&
-    !matchesAny(f, cfg.unitTestGlobs) && !matchesAny(f, cfg.integrationTestGlobs))
+  if (changed === null) return finish(findings, mode)
 
-  // Precondition: no source changes → nothing to gate. Passes trivially.
-  if (source.length === 0) return 0
+  const source = changed.filter(file => matchesAny(file, cfg.sourceGlobs) && !isTestPath(file) &&
+    !matchesAny(file, cfg.unitTestGlobs) && !matchesAny(file, cfg.integrationTestGlobs))
 
-  const findings = []
-  const unit = cfg.unitTestGlobs || []
-  const integ = cfg.integrationTestGlobs || []
-
-  // Escape hatch for legitimate no-test changes (pure plumbing, generated code):
-  // env DOD_ALLOW_NO_TESTS=1, or a `no-tests-needed` trailer in the change's commits.
-  const overridden = process.env.DOD_ALLOW_NO_TESTS === '1' || hasSkipTrailer()
-
-  // 1. Tests accompany the source change.
-  const testsChanged = changed.filter(f => matchesAny(f, unit) || matchesAny(f, integ))
-  if (!overridden && testsChanged.length === 0) {
-    findings.push(`Source changed (${source.slice(0, 3).join(', ')}${source.length > 3 ? ', …' : ''}) but no test was added or updated. ` +
-      `Add a unit test (${unit[0] || 'unit location'}) or an integration test (${integ[0] || 'integration location'}).`)
-  }
-
-  // 2. Any changed test file sits in a recognised location/type.
-  const misplaced = changed.filter(f => isTestPath(f) && !matchesAny(f, unit) && !matchesAny(f, integ))
-  if (misplaced.length) {
-    findings.push(`Test(s) not in a recognised location/type: ${misplaced.join(', ')}. ` +
-      `Unit → ${unit.join(' | ') || '(none)'}; integration → ${integ.join(' | ') || '(none)'}.`)
-  }
-
-  // 3. OpenSpec change is valid — only when wired and a change is in flight.
-  if (cfg.openspec && existsSync(resolve(root, 'openspec/changes'))) {
-    const active = readdirSync(resolve(root, 'openspec/changes'), { withFileTypes: true })
-      .some(d => d.isDirectory() && d.name !== 'archive')
-    if (active && !shOk(cfg.openspecValidateCmd || 'npx --no-install openspec validate --strict')) {
-      findings.push('OpenSpec change is missing or invalid — run `openspec validate --strict`.')
+  if (source.length) {
+    const unit = cfg.unitTestGlobs || []
+    const integration = cfg.integrationTestGlobs || []
+    const testsChanged = changed.filter(file => matchesAny(file, unit) || matchesAny(file, integration))
+    if (!activeWaiver(cfg, source) && testsChanged.length === 0) {
+      findings.push(`Source changed (${source.slice(0, 3).join(', ')}${source.length > 3 ? ', ...' : ''}) but no recognised test changed. Add a test or a time-bounded waiver with owner and reason.`)
     }
+    const misplaced = changed.filter(file => isTestPath(file) && !matchesAny(file, unit) && !matchesAny(file, integration))
+    if (misplaced.length) findings.push(`Tests are outside recognised locations: ${misplaced.join(', ')}.`)
+
+    if (cfg.openspec && existsSync(resolve(root, 'openspec/changes'))) {
+      const active = readdirSync(resolve(root, 'openspec/changes'), { withFileTypes: true })
+        .some(entry => entry.isDirectory() && entry.name !== 'archive')
+      if (active && cfg.openspecValidateCommand && !commandOk(cfg.openspecValidateCommand)) {
+        findings.push(`OpenSpec validation failed: \`${cfg.openspecValidateCommand}\`.`)
+      }
+    }
+
+    const testCommand = isCI ? (cfg.fullCommand || cfg.unitCommand) : (cfg.unitCommand || cfg.fullCommand)
+    if (testCommand && findings.length === 0 && !commandOk(testCommand)) findings.push(`Verification failed: \`${testCommand}\`.`)
   }
 
-  // 4. Tests pass. Structure first (fast fail); run only if structure is sound.
-  const testCmd = isCI ? (cfg.fullCommand || cfg.unitCommand) : (cfg.unitCommand || cfg.fullCommand)
-  if (testCmd && findings.length === 0 && !shOk(testCmd)) {
-    findings.push(`Tests failed: \`${testCmd}\`. Green tests are part of "done".`)
-  }
+  return finish(findings, mode)
+}
 
-  if (findings.length === 0) return 0
-
-  const reason = 'Definition-of-done gate — not done yet:\n- ' + findings.join('\n- ')
+function finish (findings, mode) {
+  if (!findings.length) return 0
+  const reason = `Definition-of-done gate findings:\n- ${findings.join('\n- ')}`
+  if (mode === 'advisory') { console.error(`[agent-standard advisory]\n${reason}`); return 0 }
   if (isCI) { console.error(reason); return 1 }
-  if (mode === 'advisory') { console.error('[agent-standard · advisory]\n' + reason); return 0 }
-  console.log(JSON.stringify({ decision: 'block', reason })) // strict local → keep Claude working
+  console.log(JSON.stringify({ decision: 'block', reason }))
   return 0
 }
 
-process.exit(main())
+process.exitCode = main()

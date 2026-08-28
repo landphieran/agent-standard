@@ -1,6 +1,6 @@
 # Architecture — {{ project_name }}
 
-**Stack:** {{ language_stack }} · **Style:** {{ architecture }}
+**Stack:** {{ language_stack }} · **Style:** {{ architecture }} · **Topology:** {{ topology }}
 
 This document is the contract for where code goes. The definition-of-done gate enforces
 the *test* half of it; reviewers enforce the rest.
@@ -83,3 +83,4 @@ is an adapter, swappable without touching domain or application code.
 ## Decisions
 
 Record architectural decisions as ADRs in `docs/decisions/` (one Markdown file each).
+Deployment-boundary rules are maintained separately in `docs/topology.md`.

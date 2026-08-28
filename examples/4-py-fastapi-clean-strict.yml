@@ -7,9 +7,14 @@
 project_name: ledger-api
 language_stack: py-fastapi
 architecture: clean-layered
+topology: distributed-services
 mode: greenfield
 gate: strict
 agents:
   - claude
   - codex
 ci: true
+bom_format: spdx-json
+bom_gate: strict
+security_profile: hardened
+release_attestations: false

@@ -6,10 +6,13 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 |---|---|
 | Stack | `{{ language_stack }}` |
 | Architecture | `{{ architecture }}` |
+| Deployment topology | `{{ topology }}` |
 | Mode | `{{ mode }}` |
 | Definition-of-done gate | `{{ gate }}` |
 | Agent rulebooks | {{ agents | join(', ') }} |
 | CI required check | {{ "yes" if ci else "no" }} |
+| Committed SBOM | `{{ bom_format }}` (`{{ bom_gate }}`) |
+| Security automation | `{{ security_profile }}` |
 
 ## What this repo carries
 
@@ -18,6 +21,8 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 - **Agent rulebook** — one source in `.ruler/`, fanned out to {{ agents | join(', ') }}.
 - **Definition-of-done gate** — work is not "done" until the plan is satisfied and tests
   exist in the right place, of the right type, and pass.
+- **Repository contract** — `.agent-standard/manifest.json` declares commands, docs, skills,
+  security profile, waivers, and the required CycloneDX/SPDX bill of materials.
 {% if mode == 'greenfield' %}- **Project skeleton** — a {{ architecture }} layout for {{ language_stack }}.{% endif %}
 
 ## Working here
@@ -25,16 +30,18 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 {% if language_stack == 'ts-node' or language_stack == 'ts-next' -%}
 ```bash
 npm install
-npm test
+npm run sbom
+npm run agent:verify
 ```
 {% elif language_stack == 'py-fastapi' -%}
 ```bash
 uv sync
-uv run pytest
+node .agent-standard/scripts/sbom.mjs --write
+node .agent-standard/scripts/doctor.mjs
 ```
 {% endif -%}
 
-The gate runs the same checks locally (a Claude Code stop hook) and{{ " " }}
+The gate runs fast tests locally (a Claude Code stop hook) and the complete contract{{ " " }}
 {%- if ci %}as a required CI check{% else %}— CI enforcement is disabled for this repo{% endif %}.
 
 ## Updating the standard
@@ -43,3 +50,6 @@ The gate runs the same checks locally (a Claude Code stop hook) and{{ " " }}
 copier update --trust
 ```
 
+After an update, reinstall dependencies, refresh the SBOM, run the manifest verification
+command, and commit the generated agent files. They are intentionally tracked so a fresh
+clone receives the same instructions and skills.

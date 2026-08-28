@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/landphieran/agent-standard/manifest.schema.json",
+  "title": "agent-standard project manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "standardVersion", "conformanceLevel", "project", "agents", "commands", "documents", "skills", "qualityGate", "supplyChain"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "standardVersion": { "type": "string", "minLength": 1 },
+    "conformanceLevel": { "enum": ["AS-1", "AS-2", "AS-3", "AS-4"] },
+    "project": {
+      "type": "object",
+      "required": ["name", "packageName", "stack", "architecture", "topology", "mode"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "packageName": { "type": "string", "minLength": 1 },
+        "stack": { "enum": ["ts-node", "ts-next", "py-fastapi"] },
+        "architecture": { "enum": ["service-based", "clean-layered"] },
+        "topology": { "enum": ["single-deployable", "modular-monolith", "distributed-services"] },
+        "mode": { "enum": ["greenfield", "adopt"] }
+      }
+    },
+    "agents": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "commands": { "type": "object", "required": ["install", "verify", "updateBom"] },
+    "documents": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "skills": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "qualityGate": {
+      "type": "object",
+      "required": ["mode", "ci", "waivers"],
+      "properties": {
+        "mode": { "enum": ["strict", "advisory"] },
+        "ci": { "type": "boolean" },
+        "waivers": { "type": "string" }
+      }
+    },
+    "supplyChain": {
+      "type": "object",
+      "required": ["securityProfile", "releaseAttestations", "bom"],
+      "properties": {
+        "securityProfile": { "enum": ["baseline", "hardened"] },
+        "releaseAttestations": { "type": "boolean" },
+        "bom": {
+          "type": "object",
+          "required": ["mode", "formats", "files"],
+          "properties": {
+            "mode": { "enum": ["strict", "advisory"] },
+            "formats": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["cyclonedx-json", "spdx-json"] } },
+            "files": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

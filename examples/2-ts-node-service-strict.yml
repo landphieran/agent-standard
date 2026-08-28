@@ -6,6 +6,7 @@
 project_name: orders-service
 language_stack: ts-node
 architecture: service-based
+topology: modular-monolith
 mode: greenfield
 gate: strict
 agents:
@@ -13,3 +14,7 @@ agents:
   - codex
   - copilot
 ci: true
+bom_format: cyclonedx-json
+bom_gate: strict
+security_profile: hardened
+release_attestations: false

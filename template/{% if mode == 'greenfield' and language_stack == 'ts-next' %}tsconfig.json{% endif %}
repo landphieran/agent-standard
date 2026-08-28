@@ -6,9 +6,14 @@
     "moduleResolution": "bundler",
     "jsx": "preserve",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "paths": { "@/*": ["./*"] },
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["app", "src", "__tests__", "next-env.d.ts"]
+  "include": ["app", "src", "__tests__", "next-env.d.ts", ".next/types/**/*.ts"]
 }

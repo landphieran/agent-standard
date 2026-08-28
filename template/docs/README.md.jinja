@@ -1,0 +1,24 @@
+---
+id: DOC-INDEX
+type: index
+status: active
+owner: maintainers
+scope: repository
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Documentation index
+
+Start here before changing code. Keep this index current when adding, moving, or retiring documentation.
+
+- [Architecture decisions](decisions/README.md)
+- [Operational runbooks](runbooks/README.md)
+- [Testing strategy](testing.md)
+- [Deployment topology](topology.md)
+{% if mode == 'greenfield' -%}- [Repository architecture](../ARCHITECTURE.md)
+{% endif -%}
+- [Security policy](../SECURITY.md)
+- [Contribution workflow](../CONTRIBUTING.md)
+
+Every governed document has an owner, status, verification date, and the code/configuration it was verified against. Update those fields when the document is substantively checked.

@@ -1,0 +1,17 @@
+# Security policy
+
+## Reporting
+
+Report suspected vulnerabilities privately to the repository maintainers. Do not include secrets, exploit payloads, personal data, or unredacted production logs in a public issue.
+
+## Required engineering controls
+
+- Treat all external input and agent/tool output as untrusted data.
+- Keep credentials out of source, prompts, logs, fixtures, and committed agent configuration.
+- Use least-privilege workflow permissions and pinned GitHub Action commit SHAs.
+- Update and commit the configured SBOM after dependency changes; CI validates its package identities.
+- Use `.agent-standard/waivers.json` only for time-bounded, owned exceptions with a concrete reason.
+
+## Supported versions
+
+Until the project publishes a release policy, only the default branch is supported.

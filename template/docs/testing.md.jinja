@@ -1,0 +1,28 @@
+---
+id: TEST-STRATEGY
+type: standard
+status: active
+owner: maintainers
+scope: testing
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Testing strategy
+
+The Definition of Done gate requires production-code changes to include a recognised test unless a time-bounded waiver exists in `.agent-standard/waivers.json`.
+
+| Test type | Location | Purpose |
+|---|---|---|
+{% if language_stack == 'py-fastapi' -%}
+| Unit | `tests/unit/test_*.py` | Domain and application behavior without I/O |
+| Integration | `tests/integration/test_*.py` | FastAPI and adapter behavior across real boundaries |
+{% elif language_stack == 'ts-next' -%}
+| Unit/component | `__tests__/` or `*.test.ts(x)` | Synchronous logic and component behavior |
+| End-to-end | `e2e/*.spec.ts` | App Router, async server behavior, and user-visible flows |
+{% else -%}
+| Unit | colocated `*.test.ts` or `tests/unit/` | Pure behavior without infrastructure |
+| Integration | `tests/integration/` | Wired adapters and service boundaries |
+{% endif %}
+
+Tests must assert observable behavior. A test changed only to satisfy the filename gate is a review failure even if automation passes.

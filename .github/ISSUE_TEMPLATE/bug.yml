@@ -1,0 +1,31 @@
+name: Standard defect
+description: Report a render, update, gate, documentation, or conformance failure.
+title: "bug: "
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [render, update, agent-rules, skills, docs, quality-gate, sbom, security-workflow]
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Copier answers and environment
+      description: Remove credentials and private data.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+    validations:
+      required: true

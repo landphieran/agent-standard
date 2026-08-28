@@ -1,23 +1,26 @@
 {
   "mode": "{{ gate }}",
+  "waiversFile": ".agent-standard/waivers.json",
+  "doctorCommand": "node .agent-standard/scripts/doctor.mjs",
 {%- if language_stack == 'ts-node' %}
   "sourceGlobs": ["src/**/*.ts"],
   "unitTestGlobs": ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
   "integrationTestGlobs": ["tests/integration/**/*.test.ts", "src/**/*.integration.test.ts"],
   "unitCommand": "npm run test:unit",
-  "fullCommand": "npm test",
+  "fullCommand": "npm run verify:code",
 {%- elif language_stack == 'ts-next' %}
   "sourceGlobs": ["app/**/*.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts"],
   "unitTestGlobs": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
   "integrationTestGlobs": ["e2e/**/*.spec.ts", "tests/integration/**"],
   "unitCommand": "npm run test:unit",
-  "fullCommand": "npm test",
+  "fullCommand": "npm run verify:code",
 {%- elif language_stack == 'py-fastapi' %}
   "sourceGlobs": ["src/**/*.py", "app/**/*.py"],
   "unitTestGlobs": ["tests/unit/**/*.py"],
   "integrationTestGlobs": ["tests/integration/**/*.py"],
   "unitCommand": "uv run pytest tests/unit -q",
-  "fullCommand": "uv run pytest -q",
+  "fullCommand": "uv run ruff format --check . && uv run ruff check . && uv run mypy src && uv run pytest -q",
 {%- endif %}
-  "openspec": true
+  "openspec": true,
+  "openspecValidateCommand": "npx --yes @fission-ai/openspec@1.11.0 validate --strict"
 }

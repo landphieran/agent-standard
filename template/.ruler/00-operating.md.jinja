@@ -6,7 +6,7 @@ ruler fans it to each tool. Edit `.ruler/`, then run `ruler apply` — never the
 
 Below this file, ruler appends the **language standards** and the **architecture
 standards** for this project. Follow all three. They are specific to
-**{{ language_stack }}** and **{{ architecture }}** on purpose — do not apply generic habits
+**{{ language_stack }}**, **{{ architecture }}**, and **{{ topology }}** on purpose — do not apply generic habits
 from other stacks.
 
 ## The loop — spec → plan → build → done
@@ -36,6 +36,8 @@ standards below, which the gate cannot check.
 
 - Specs / plans → `openspec/`
 - Architecture decisions (ADRs) → `docs/decisions/` (one Markdown ADR per decision)
+- Documentation routing → `docs/README.md`
+- Deployment topology → `docs/topology.md`
 {% if mode == 'greenfield' -%}
 - Directory layout for this architecture → `ARCHITECTURE.md`
 {%- else -%}
@@ -47,4 +49,6 @@ standards below, which the gate cannot check.
 
 - Match the surrounding code; keep changes small and reviewed.
 - Never commit secrets or a personal agent settings file.
+- Keep dependency lockfiles and the configured CycloneDX/SPDX SBOM current together.
+- Use only owned, reasoned, expiring entries in `.agent-standard/waivers.json` for exceptions.
 - Prefer existing utilities and patterns over introducing new ones.

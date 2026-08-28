@@ -3,8 +3,8 @@
 <!-- ARCH:service-based -->
 This project uses **service-based architecture**: the codebase is organised into services,
 each owning one business capability behind an explicit contract. Default to a modular
-monolith — extract a separately deployable service only when independent scaling or team
-autonomy genuinely demands it.
+monolith unless `docs/topology.md` selects distributed services. Architecture and deployment
+topology are separate: follow the selected topology's operational boundaries.
 
 ## Boundaries
 

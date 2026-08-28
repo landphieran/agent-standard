@@ -1,128 +1,57 @@
 # Architecture
 
-How agent-standard is built and how the pieces interact. This is an engineering
-document, not a pitch — it describes the real wiring, file ownership, and control flow.
-
-## The idea
-
-agent-standard is **not** a monolith that reimplements planning, docs, and scaffolding.
-It is a thin **integration spine**: one configuration selects a stack and architecture,
-and Copier composes three mature tools plus one purpose-built gate into a repository that
-has a consistent, *enforced* process for agent-driven development.
-
-| Concern | Tool | Build or adopt |
-|---|---|---|
-| Delivery, scaffolding, staying up to date | **Copier** | adopt |
-| Planning process (spec → plan → tasks) | **OpenSpec** | adopt |
-| One rulebook across every agent tool | **ruler** | adopt |
-| **Definition-of-done enforcement** | **custom gate** (`dod.mjs`) | **build** — nothing off-the-shelf does this |
-
-## Composition
+agent-standard is a versioned conformance specification with a reference generator. Its public API is the Copier answer model; its output is a repository contract that humans, agents, and CI can all inspect.
 
 ```mermaid
 flowchart TD
-    subgraph cfg["agent-standard.config (the answers)"]
-      A["language_stack · architecture · mode · gate · agents · ci"]
-    end
-
-    A --> COP["Copier\n(renders + orchestrates)"]
-
-    COP -->|renders| SK["Project skeleton\n(stack × architecture)"]
-    COP -->|renders| RB[".ruler/ rulebook source"]
-    COP -->|renders| GATE[".claude/hooks/dod.mjs\n.agent-standard/gate.json\n.github/workflows/dod.yml"]
-    COP -->|"_task (once)"| OS["OpenSpec init\nopenspec/"]
-    COP -->|"_task (always)"| RL["ruler apply"]
-
-    RB --> RL
-    RL -->|generates| CM["CLAUDE.md"]
-    RL -->|generates| AM["AGENTS.md"]
-
-    OS --> DEV(("Agent does work"))
-    CM --> DEV
-    AM --> DEV
-    DEV --> GATE
-    GATE -->|"blocks until done"| DONE["Change is done"]
+  C[Copier answers] --> T[Rendered project contract]
+  T --> M[Manifest and schema]
+  T --> R[.ruler rules and skills]
+  T --> O[OpenSpec change workflow]
+  T --> D[Governed docs and ADRs]
+  T --> Q[DoD and BOM gates]
+  R --> A[Tracked client instructions and skills]
+  M --> V[Doctor]
+  D --> V
+  Q --> V
+  V --> CI[Required CI checks]
+  CI --> S[Build SBOM and optional attestations]
 ```
 
-The configuration is the product surface. Everything downstream — which skeleton, which
-gate globs, which agents get a rulebook, whether CI is emitted — is derived from it.
+## Ownership seams
 
-## File ownership (the seam map)
-
-Each tool owns a disjoint set of paths, so they compose without clobbering each other.
-This is the rule that keeps `copier update` safe.
-
-| Path | Owner | Notes |
+| Path | Owner | Contract |
 |---|---|---|
-| skeleton (`src/`, `app/`, configs), gated by answers | **Copier template** | rendered only in `greenfield` mode |
-| `.copier-answers.yml` | Copier | records answers; never hand-edit |
-| `.ruler/**` | **Copier template** | the rulebook **source** — three conditionally-rendered modules: `00-operating` (shared loop + DoD), `10-<language>` (language/framework standards), `20-<architecture>` (architecture standards, concretized to the language). Only the modules matching `language_stack`/`architecture` render, so the rulebook is never agnostic. |
-| `CLAUDE.md`, `AGENTS.md` | **ruler** (generated) | Copier is told to **exclude** these — rendering them would clobber ruler on update |
-| `openspec/`, `.claude/skills/openspec-*`, `.claude/commands/opsx/` | **OpenSpec** | created by `init`, upgraded by `update` |
-| `.claude/settings.json`, `.claude/hooks/dod.mjs` | **the gate** | committed hook config |
-| `.github/workflows/dod.yml` | **the gate** | the required CI check |
-| `.gitignore` | shared | the template writes it; ruler appends its own managed block |
+| application skeleton and configs | Copier | Rendered only for greenfield projects |
+| `.copier-answers.yml` | Copier | Recorded update inputs; do not hand-edit |
+| `.ruler/**` | agent-standard/Ruler | Canonical rules and skills |
+| `AGENTS.md`, `CLAUDE.md`, client skill directories | Ruler | Generated but intentionally committed and reviewed |
+| `openspec/**`, OpenSpec client skills | OpenSpec | Initialized or updated by the pinned CLI |
+| `.agent-standard/**` | agent-standard | Manifest, schema, gate configuration, waivers, doctor, and SBOM tooling |
+| `docs/**`, `SECURITY.md`, `CONTRIBUTING.md` | repository maintainers | Governed documentation kernel |
+| `.github/**` | agent-standard plus maintainers | CI baseline; repositories may add stricter jobs |
 
-`.claude/` and `.github/` are **co-owned** (OpenSpec skills + gate files), so the template
-never renders those whole directories — only specific files inside them.
+Ruler runs with `--gitignore=false`, so generated client artifacts survive a fresh clone. Canonical edits still happen in `.ruler/`; CI and review detect missing generated surfaces.
 
-## The definition-of-done gate
+## Two orthogonal architecture axes
 
-The gate is the one thing built from scratch, because nothing verifies "the agent wrote
-tests, in the right place, of the right type, and they pass" as a completion condition.
-One script runs in two places so their verdicts always agree:
+`architecture` controls dependency direction inside a deployable unit. `topology` controls how many units deploy and communicate. A clean-layered modular monolith and a clean-layered distributed service are both coherent configurations; making these choices independent removes the previous false either/or.
 
-```mermaid
-flowchart TD
-    START["change under review"] --> PRE{"source files changed?\n(docs/config/lockfiles excluded)"}
-    PRE -->|no| PASS["pass — nothing to gate"]
-    PRE -->|yes| T1{"tests added/updated\nin the right location & type?"}
-    T1 -->|no| FAIL["block"]
-    T1 -->|yes| T2{"OpenSpec change valid?\n(if one is in flight)"}
-    T2 -->|no| FAIL
-    T2 -->|yes| T3{"suite green?\n(unit locally · full in CI)"}
-    T3 -->|no| FAIL
-    T3 -->|yes| PASS
-    FAIL -->|"no-tests-needed trailer"| PASS
-```
+Greenfield projects receive actual architecture directories with boundary notes. Adoption mode keeps existing code but still creates the manifest and documentation contracts so teams can map current paths deliberately.
 
-**Two entry points, one script (`.claude/hooks/dod.mjs`):**
+## Enforcement flow
 
-```mermaid
-flowchart LR
-    subgraph local["Local — fast feedback (bypassable)"]
-      H["Claude Code Stop hook"] -->|"diff vs HEAD + untracked"| G1["dod.mjs"]
-      G1 -->|strict fail| B1["decision: block\n(Claude keeps working)"]
-    end
-    subgraph ci["CI — the hard boundary"]
-      W["required check on protected branch"] -->|"diff base..head"| G2["dod.mjs --ci"]
-      G2 -->|fail| B2["exit 1 — merge blocked"]
-    end
-```
+The local Claude Stop hook is fast feedback and remains bypassable by design. CI is the hard boundary.
 
-The local hook is deliberately fast (unit tests only) and is bypassable
-(`disableAllHooks`, workspace-trust). The **required CI check runs the full suite and is
-the real enforcement** — the hook is matching fast feedback so problems surface before CI.
-The gate passes trivially when there is nothing to check (clean tree, docs-only change, a
-freshly rendered repo), so it never nags mid-conversation.
+1. The doctor checks the manifest, required tracked files, skill frontmatter, local documentation links, and selected SBOM identities.
+2. The DoD gate compares event SHAs using argument-safe Git execution.
+3. Source changes require a recognised test or an owned, reasoned, unexpired path waiver.
+4. Active OpenSpec changes validate with the pinned CLI.
+5. CI executes the stack's lint, type, test, and build contract.
+6. A pinned Syft action emits a build SBOM in the selected format(s).
 
-## How a configuration flows through — worked example
+Advisory mode reports the same findings and returns success both locally and in CI. Strict mode blocks locally and exits non-zero in CI.
 
-`language_stack: py-fastapi`, `architecture: clean-layered`, `mode: greenfield`,
-`gate: strict`, `agents: [claude, codex]`, `ci: true`:
+## Update behavior
 
-1. **Copier** renders the Python clean-layered skeleton (`src/<pkg>/domain|application|adapters`, `tests/unit`, `tests/integration`), `pyproject.toml`, `ARCHITECTURE.md`, the `.ruler/` rulebook, the gate files, and the CI workflow (because `ci: true`).
-2. `_task` runs `openspec init --tools claude,codex` → `openspec/` + Claude/Codex skills.
-3. `_task` runs `ruler apply --agents claude,codex` → generates `CLAUDE.md` + `AGENTS.md` from `.ruler/`.
-4. `.agent-standard/gate.json` gets the Python globs and `uv run pytest` commands, `mode: strict`.
-5. From then on: every change goes spec → plan → build, and cannot be called done until a test exists under `tests/unit` or `tests/integration` and `uv run pytest` is green — enforced locally by the stop hook and required in CI.
-
-## Runtimes and constraints
-
-- **Two runtimes on the developer machine:** Python + Git (for Copier) and Node ≥20 (for
-  OpenSpec, ruler, and the gate). The `bootstrap` step checks both.
-- Copier `_tasks` execute shell commands, so `copier copy`/`update` require **`--trust`**.
-- ruler is pre-1.0 and OpenSpec's layout evolves — the tool versions are **pinned** in
-  `copier.yml` and re-verified on bump.
-- The composition is intentionally swappable: the process engine (OpenSpec) sits behind a
-  file convention, so it can be replaced without touching the gate or the skeletons.
+`copier update --trust` re-renders owned files, updates OpenSpec, regenerates Ruler outputs and client skills, and refreshes the SBOM. Teams then reinstall dependencies if manifests changed, regenerate the SBOM from the final lockfile, run the doctor, review all generated diffs, and commit them together.

@@ -1,67 +1,62 @@
 # agent-standard
 
-A configurable **paved path** for AI-agent-driven development. Adopt it into a repository
-and get one consistent, *enforced* process: a planning workflow, a rulebook of
-**opinionated, research-backed coding standards specific to your language and
-architecture** (shared across every agent tool), a matching project skeleton, and a
-definition-of-done gate that blocks "done" until the plan was followed and the tests are
-real — in the right place, of the right type, and passing.
+A configurable, testable repository standard for AI-agent-assisted development. Copier renders the project contract; OpenSpec structures changes; Ruler distributes one rulebook and skill pack across agent clients; deterministic scripts and GitHub Actions enforce everything machines can prove.
 
-It is a thin **integration spine**, not a monolith: it composes three mature tools and
-adds the one thing none of them do.
+## What a repository receives
 
-| Concern | Tool |
+| Control | Generated implementation |
 |---|---|
-| Delivery + scaffolding + staying current | **Copier** (`copier update`) |
-| Planning: spec → plan → tasks | **OpenSpec** |
-| One rulebook across Claude / Codex / Copilot | **ruler** |
-| **Definition-of-done enforcement** | a purpose-built gate (`dod.mjs`) — the differentiator |
+| Agent execution | Tracked `AGENTS.md`/`CLAUDE.md` plus portable workflow skills generated from `.ruler/` |
+| Change workflow | OpenSpec proposal, plan, task, validation, and archive flow |
+| Project contract | `.agent-standard/manifest.json` and JSON Schema |
+| Documentation maintenance | Indexed docs, metadata, ADR template, runbook index, and link/conformance checks |
+| Quality | One Definition of Done verdict locally and in CI; structured expiring waivers |
+| Architecture | Stack-specific rules and scaffold, with internal architecture separate from deployment topology |
+| Supply chain | Committed CycloneDX JSON, SPDX JSON, or both; lockfile-aware freshness checks and CI build SBOMs |
+| Security | SHA-pinned Actions, least-privilege permissions, Dependabot, dependency review, optional CodeQL, optional release attestations |
 
-## Configurable
+## Configuration surface
 
-| Setting | Options |
-|---|---|
-| Stack | TypeScript Node service · TypeScript Next.js · Python FastAPI |
-| Architecture | service-based · clean/layered |
-| Mode | greenfield (scaffold) · adopt (existing repo) |
-| Gate | strict (blocks) · advisory (reports) |
-| Agents | Claude · Codex · Copilot |
-| CI | required check on/off |
+- Stacks: TypeScript Node, TypeScript Next.js, Python FastAPI
+- Architecture: capability/service-based or clean/layered
+- Topology: single deployable, modular monolith, or distributed services
+- Mode: greenfield scaffold or adoption into an existing repository
+- Enforcement: strict or advisory Definition of Done; strict or advisory BOM gate
+- BOM: CycloneDX JSON, SPDX JSON, or both
+- Agents: Claude, Codex, Copilot
+- Security: baseline or hardened; optional release attestations
 
 ## Quick start
 
+Prerequisites are Git, Node 22+, and Copier through `uvx` or an installed Python tool.
+
 ```bash
-# needs: Git, Python+Copier (uv tool install copier), Node >=20
-copier copy --trust gh:landphieran/agent-standard ./my-service
+uvx copier copy --trust gh:landphieran/agent-standard ./my-service
 ```
 
-Or use a ready-made configuration: `--data-file examples/2-ts-node-service-strict.yml`.
-Full steps for new and existing repos: **[docs/runbook.md](docs/runbook.md)**.
+Install dependencies before the first commit so the lockfile and generated SBOM are included. Follow [the runbook](docs/runbook.md) for greenfield and adoption paths.
+
+## Maintainer verification
+
+```bash
+npm install
+npm test
+pwsh -NoProfile -File scripts/verify-render.ps1
+```
+
+The render matrix exercises all four examples through Copier tasks, tracked Ruler outputs, skill propagation, dependency installation, BOM refresh, doctor checks, and stack-native verification.
 
 ## Documentation
 
-- [docs/runbook.md](docs/runbook.md) — stand it up (new repo or adopt), and stay current
-- [docs/configuration.md](docs/configuration.md) — every setting and its impact
-- [docs/architecture.md](docs/architecture.md) — how the four tools compose (with diagrams)
-- [examples/](examples/) — four ready-to-render configurations
-
-## Repository layout
-
-```
-copier.yml            the config model + tasks that bootstrap OpenSpec & ruler
-template/             what gets rendered into a consumer repo
-  .claude/hooks/dod.mjs   the definition-of-done gate (Node, cross-platform)
-  .agent-standard/        the gate's per-stack config
-  .ruler/                 the rulebook source (fanned out by ruler)
-  .github/workflows/      the required CI check
-  <skeletons>             stack × architecture, gated by answers
-test/                 fixture tests for the gate
-examples/             four example configurations
-docs/                 architecture, configuration, runbook
-```
+- [Architecture](docs/architecture.md)
+- [Configuration reference](docs/configuration.md)
+- [Adoption and update runbook](docs/runbook.md)
+- [Conformance levels and controls](docs/conformance.md)
+- [Supply-chain standard](docs/supply-chain.md)
+- [GitHub enforcement and hardening](docs/github-hardening.md)
+- [Further standardization roadmap](docs/roadmap.md)
+- [Rendered examples](examples/README.md)
 
 ## Status
 
-Working baseline. All three stacks render, install, test green, and are gate-enforced;
-`copier update` round-trips; adopt mode wires an existing repo without a skeleton. Tool
-versions are pinned in `copier.yml`. Local repository only until a remote is chosen.
+Pre-release. The current source identifies itself as `0.6.0-dev`; no release or compatibility promise exists yet. Changes can land as one coherent batch, but the render/update contract is tested before every merge.

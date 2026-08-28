@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,7 +68,7 @@ test('source changed, no test — BLOCKS', () => {
   write(d, 'src/foo.ts')
   const r = runHook(d)
   assert.equal(blocks(r), true)
-  assert.match(r.stdout, /no test was added/)
+  assert.match(r.stdout, /no recognised test changed/)
   cleanup(d)
 })
 
@@ -77,7 +77,7 @@ test('source + a test in the wrong place — BLOCKS on location', () => {
   write(d, 'src/foo.ts'); write(d, 'wrong/foo.test.ts', 'test\n')
   const r = runHook(d)
   assert.equal(blocks(r), true)
-  assert.match(r.stdout, /not in a recognised location/)
+  assert.match(r.stdout, /outside recognised locations/)
   cleanup(d)
 })
 
@@ -94,7 +94,7 @@ test('source + test present but suite RED — BLOCKS', () => {
   write(d, 'src/foo.ts'); write(d, 'src/foo.test.ts', 'test\n')
   const r = runHook(d)
   assert.equal(blocks(r), true)
-  assert.match(r.stdout, /Tests failed/)
+  assert.match(r.stdout, /Verification failed/)
   cleanup(d)
 })
 
@@ -107,13 +107,26 @@ test('advisory mode — reports but NEVER blocks', () => {
   cleanup(d)
 })
 
-test('override DOD_ALLOW_NO_TESTS — source without test — passes', () => {
+test('owned, unexpired path waiver — source without test — passes', () => {
   const d = makeRepo()
   write(d, 'src/foo.ts')
-  const r = spawnSync('node', [GATE], { cwd: d, input: '{}', encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PROJECT_DIR: d, DOD_ALLOW_NO_TESTS: '1' } })
-  assert.equal(r.status ?? 0, 0)
-  assert.doesNotMatch(r.stdout ?? '', /decision/)
+  write(d, '.agent-standard/waivers.json', JSON.stringify({ noTests: [{
+    id: 'WAIVER-1', owner: 'team@example.com', reason: 'generated source only',
+    expires: '2999-01-01', paths: ['src/**/*.ts']
+  }] }))
+  const r = runHook(d)
+  assert.equal(r.code, 0); assert.equal(blocks(r), false)
+  cleanup(d)
+})
+
+test('expired waiver — source without test — BLOCKS', () => {
+  const d = makeRepo()
+  write(d, 'src/foo.ts')
+  write(d, '.agent-standard/waivers.json', JSON.stringify({ noTests: [{
+    id: 'WAIVER-1', owner: 'team@example.com', reason: 'expired',
+    expires: '2000-01-01', paths: ['src/**/*.ts']
+  }] }))
+  assert.equal(blocks(runHook(d)), true)
   cleanup(d)
 })
 
@@ -132,7 +145,7 @@ test('CI mode — source without test over a range — EXITS NON-ZERO', () => {
   write(d, 'src/foo.ts'); git(['add', '-A']); git(['commit', '-qm', 'add source, no test'])
   const r = runCI(d, base)
   assert.equal(r.code, 1)
-  assert.match(r.stderr, /no test was added/)
+  assert.match(r.stderr, /no recognised test changed/)
   cleanup(d)
 })
 
@@ -144,5 +157,25 @@ test('CI mode — source WITH test and green suite — passes', () => {
   git(['add', '-A']); git(['commit', '-qm', 'source + test'])
   const r = runCI(d, base)
   assert.equal(r.code, 0)
+  cleanup(d)
+})
+
+test('CI advisory mode reports findings but exits zero', () => {
+  const d = makeRepo({ ...GATE_CFG, mode: 'advisory' })
+  const git = a => execFileSync('git', a, { cwd: d, stdio: 'ignore' })
+  const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  write(d, 'src/foo.ts'); git(['add', '-A']); git(['commit', '-qm', 'source without test'])
+  const r = runCI(d, base)
+  assert.equal(r.code, 0)
+  assert.match(r.stderr, /advisory/)
+  cleanup(d)
+})
+
+test('CI refs are passed to git as arguments, not executed by a shell', () => {
+  const d = makeRepo()
+  const marker = join(d, 'injected.txt')
+  spawnSync('node', [GATE, '--ci', '--base', `HEAD;echo injected>${marker}`, '--head', 'HEAD'],
+    { cwd: d, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: d } })
+  assert.equal(existsSync(marker), false)
   cleanup(d)
 })

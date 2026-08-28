@@ -1,0 +1,17 @@
+---
+id: ADR-INDEX
+type: index
+status: active
+owner: maintainers
+scope: architecture-decisions
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Architecture decision records
+
+Create an ADR for a durable choice that changes boundaries, dependencies, data ownership, security posture, or an operational constraint. Copy [0000-template.md](0000-template.md), assign the next number, and link it here.
+
+## Active decisions
+
+No decisions recorded yet.

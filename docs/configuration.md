@@ -1,55 +1,44 @@
 # Configuration reference
 
-Every setting agent-standard asks, its allowed values, and exactly what changes when you
-set it. Answers are recorded in `.copier-answers.yml` and re-used by `copier update`.
+Answers are recorded in `.copier-answers.yml` and reused by `copier update --trust`.
 
-| Setting | Values | What it controls |
+| Setting | Values | Effect |
 |---|---|---|
-| `project_name` | any string | Name used in generated files, the rulebook, and docs. A slug (`pkg`) is derived for package/import names (`My Service` → `my_service`). |
-| `language_stack` | `ts-node` · `ts-next` · `py-fastapi` | The whole toolchain: the skeleton, the test runner, the gate's globs, the CI step — **and the coding-standards module** fanned into the agent rulebook (`.ruler/10-<language>.md`), specific to that language/framework. |
-| `architecture` | `service-based` · `clean-layered` | The directory layout (`ARCHITECTURE.md`) **and the architecture-standards module** in the rulebook (`.ruler/20-<architecture>.md`), concretized to the chosen language with real directories and forbidden imports. Service-based groups by capability behind contracts; clean-layered enforces inward-pointing dependencies. |
-| `mode` | `greenfield` · `adopt` | `greenfield` scaffolds a full project skeleton. `adopt` writes **no** skeleton — only the standard's wiring (rulebook, process, gate) into an existing repo. |
-| `gate` | `strict` · `advisory` | `strict` **blocks** work until the definition-of-done passes. `advisory` reports the same findings but never blocks — the honest way to adopt gradually. |
-| `agents` | any of `claude`, `codex`, `copilot` | Which tools get a generated rulebook (ruler targets) and OpenSpec tool integration. More agents = more entry files kept in sync from the one `.ruler/` source. |
-| `ci` | `true` · `false` | Whether the required-check CI workflow (`.github/workflows/dod.yml`) is emitted. This is the **hard** enforcement boundary; the local hook alone is bypassable. |
+| `project_name` | string | Human name and derived import/package slug |
+| `language_stack` | `ts-node`, `ts-next`, `py-fastapi` | Skeleton, language rules, commands, globs, CI setup, and dependency discovery |
+| `architecture` | `service-based`, `clean-layered` | Internal module boundaries, dependency direction, scaffold directories, and architecture rules |
+| `topology` | `single-deployable`, `modular-monolith`, `distributed-services` | Deployable/data/operational boundaries documented in `docs/topology.md` |
+| `mode` | `greenfield`, `adopt` | Whether project source/config skeletons are created |
+| `gate` | `strict`, `advisory` | Whether Definition of Done findings block locally and in CI |
+| `agents` | `claude`, `codex`, `copilot` | OpenSpec integrations and Ruler output targets; root `AGENTS.md` is always emitted |
+| `ci` | boolean | Emits quality, dependency review, and optional CodeQL workflows |
+| `bom_format` | `cyclonedx-json`, `spdx-json`, `both` | Committed BOM files and build artifact formats |
+| `bom_gate` | `strict`, `advisory` | Whether missing, invalid, or dependency-stale BOMs fail the doctor |
+| `security_profile` | `baseline`, `hardened` | Hardened adds CodeQL to dependency and workflow controls |
+| `release_attestations` | boolean | Emits tag-triggered GitHub build/SBOM attestations; use only for releasable artifacts |
 
-## What each choice changes, concretely
+## Project manifest
 
-**`language_stack`** sets the gate's `.agent-standard/gate.json`:
+`.agent-standard/manifest.json` is the machine-readable source of truth for selected settings, conformance level, install/verify/BOM commands, governed documents, skills, waivers, and supply-chain policy. Its schema is committed beside it. Tool-specific configuration should be derived from or checked against this file instead of inventing another registry.
 
-| Stack | Source | Unit tests | Integration tests | Runner |
-|---|---|---|---|---|
-| `ts-node` | `src/**/*.ts` | colocated `*.test.ts`, `tests/unit/` | `tests/integration/`, `*.integration.test.ts` | Vitest |
-| `ts-next` | `app,src,components,lib/**` | `__tests__/`, `*.test.tsx` | `e2e/*.spec.ts`, `tests/integration/` | Vitest + Playwright |
-| `py-fastapi` | `src,app/**/*.py` | `tests/unit/test_*.py` | `tests/integration/test_*.py` | pytest |
+## Waivers
 
-**`gate`** — how the definition-of-done gate responds when a change lands source without
-a matching test, misplaces a test, or the suite is red:
-- `strict` → the local Claude Code stop hook returns `{"decision":"block"}` and CI fails.
-- `advisory` → both print the findings and exit 0.
-- Either way, an individual change can opt out with a `no-tests-needed` commit trailer.
+The only no-test exception surface is `.agent-standard/waivers.json`:
 
-**`mode: adopt`** omits: the project skeleton, `pyproject.toml`/`package.json`,
-`ARCHITECTURE.md`. It keeps: `.ruler/`, the gate (`.claude/hooks/dod.mjs`,
-`.agent-standard/gate.json`, `.claude/settings.json`), the CI workflow, and OpenSpec init.
+```json
+{
+  "noTests": [{
+    "id": "WAIVER-123",
+    "owner": "team@example.com",
+    "reason": "generated compatibility shim",
+    "expires": "2026-09-30",
+    "paths": ["src/generated/**"]
+  }]
+}
+```
 
-## Standards delivered to the agents
+A waiver applies only while unexpired and only when all changed source paths match. Environment variables and free-text commit trailers are intentionally not bypasses.
 
-The generated rulebook (`CLAUDE.md` / `AGENTS.md`, built by ruler from `.ruler/`) is
-assembled from three modules, so agents get exactly the standards for *this* project and
-nothing agnostic:
+## Adoption mode
 
-- `00-operating.md` — the shared loop (spec → plan → build → done) and definition of done.
-- `10-<language>.md` — opinionated, research-backed **language/framework standards** (Python+FastAPI, TypeScript+Node, or TypeScript+Next.js): typing discipline, error handling, framework patterns, tooling.
-- `20-<architecture>.md` — **architecture standards** concretized to your language: the real directories, the forbidden imports, contracts/DTOs at the boundary, and how to enforce it with an arch-test.
-
-Selecting `py-fastapi` gives Python standards; `ts-next` gives Next.js standards; the
-architecture module names actual directories for that language. To change a standard, edit
-`.ruler/` and run `ruler apply` — never the generated files.
-
-## What you may not do
-
-There is no setting to disable a rule of the definition-of-done gate individually, and no
-setting to point an agent at a different rulebook. The value is consistency; a per-repo
-opt-out surface would erode it. Use `advisory` to soften enforcement, or the
-`no-tests-needed` trailer for a single justified exception.
+Adoption cannot infer an existing repository's exact commands or paths. The rendered manifest and gate contain stack defaults; the adopter must map them to real scripts/globs, add or link architecture documentation, refresh the BOM after the existing lockfile is installed, and run the doctor before changing from advisory to strict.

@@ -3,20 +3,32 @@
   "version": "0.1.0",
   "description": "{{ project_name }}",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "test": "vitest run",
+    "lint": "eslint app src __tests__ e2e playwright.config.ts vitest.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run __tests__",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:code": "npm run lint && npm run typecheck && npm test && npm run build",
+    "agent:verify": "node .agent-standard/scripts/doctor.mjs",
+    "sbom": "node .agent-standard/scripts/sbom.mjs --write"
   },
   "dependencies": {
-    "next": "^15.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.3",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }

@@ -1,0 +1,9 @@
+# Contributing
+
+1. Start a change in `openspec/changes/` and define acceptance criteria.
+2. Read `AGENTS.md`, [the documentation index](docs/README.md), and the architecture contract relevant to the change.
+3. Keep implementation, tests, documentation, decisions, and the SBOM in the same pull request when they change together.
+4. Run the manifest command `commands.verify` from `.agent-standard/manifest.json`.
+5. Open a pull request using the repository template. CI is the hard merge boundary.
+
+Generated agent files are committed. Edit `.ruler/` and rerun Ruler; do not hand-edit `AGENTS.md`, `CLAUDE.md`, or propagated skill copies.

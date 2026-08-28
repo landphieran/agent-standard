@@ -28,6 +28,15 @@ architecture:
     "Clean / layered — domain-centric, dependency-inverted": clean-layered
   default: service-based
 
+topology:
+  type: str
+  help: Deployment topology (kept separate from the code architecture)
+  choices:
+    "Single deployable - one application/process": single-deployable
+    "Modular monolith - capability modules in one deployable": modular-monolith
+    "Distributed services - independently deployable services": distributed-services
+  default: modular-monolith
+
 mode:
   type: str
   help: Greenfield scaffolds a project skeleton; adopt wires the standard into an existing repo
@@ -62,6 +71,36 @@ ci:
   help: Emit the required-check CI workflow (the hard enforcement boundary)?
   default: true
 
+bom_format:
+  type: str
+  help: Committed software bill of materials format
+  choices:
+    "CycloneDX JSON": cyclonedx-json
+    "SPDX JSON": spdx-json
+    "Both CycloneDX JSON and SPDX JSON": both
+  default: cyclonedx-json
+
+bom_gate:
+  type: str
+  help: Whether an absent, invalid, or stale SBOM blocks verification
+  choices:
+    "Strict - fail the quality gate": strict
+    "Advisory - report without failing": advisory
+  default: strict
+
+security_profile:
+  type: str
+  help: Repository security automation profile
+  choices:
+    "Baseline - dependency updates and dependency review": baseline
+    "Hardened - baseline plus CodeQL": hardened
+  default: hardened
+
+release_attestations:
+  type: bool
+  help: Emit an opt-in release workflow for signed build and SBOM attestations?
+  default: false
+
 # ── derived / non-asked ──────────────────────────────────────────────────────
 
 # Import-safe package name derived from the project name (e.g. "My Service" -> "my_service").
@@ -71,11 +110,12 @@ pkg:
   default: "{{ project_name | lower | replace('-', '_') | replace(' ', '_') }}"
 
 _message_after_copy: |
-  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} · {{ architecture }}).
+  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} · {{ architecture }} · {{ topology }}).
 
   Next:
-    - review the generated files, then commit them
-  {% if mode == 'greenfield' %}  - install deps and run the tests to see the gate pass{% endif %}
+  {% if mode == 'greenfield' %}  - install dependencies to create the lockfile
+    - refresh the SBOM and run the verification command in README.md{% else %}  - map commands and globs to the adopted repository, then refresh the SBOM{% endif %}
+    - review and commit every generated file, including agent instructions and skills
     - pull future standard updates with:  copier update --trust
 
 # Files that must never be rendered by Copier because another tool owns them.
@@ -93,11 +133,24 @@ _exclude:
 # Bootstrap the adopted tools after rendering. Requires Node on the machine.
 # NOTE: Copier runs tasks only with `--trust` (they execute shell commands).
 _tasks:
-  # OpenSpec: initialise once (on `copy`), then let `openspec update` handle upgrades.
+  # Copy-time bootstrap. Update-time regeneration is handled by post-migrations
+  # so it runs only after Copier has merged the new template into the real repo.
+  # OpenSpec: initialise once, then let `openspec update` handle upgrades.
   # copilot -> github-copilot for OpenSpec's tool names.
   - command: "npx --yes @fission-ai/openspec@1.11.0 init --tools {{ agents | map('replace', 'copilot', 'github-copilot') | join(',') }} --force --no-animation"
     when: "{{ _copier_operation == 'copy' }}"
-  - command: "npx --yes @fission-ai/openspec@1.11.0 update"
-    when: "{{ _copier_operation == 'update' }}"
   # ruler: regenerate the per-agent rulebooks every time (fresh from .ruler/).
-  - "npx --yes @intellectronica/ruler@0.3.44 apply --agents {{ agents | join(',') }}"
+  - command: "npx --yes @intellectronica/ruler@0.3.44 apply --local-only --skills --no-backup --gitignore=false --agents agentsmd,{{ agents | join(',') }}"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "node .agent-standard/scripts/sync-skills.mjs"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "node .agent-standard/scripts/sbom.mjs --write"
+    when: "{{ _copier_operation == 'copy' }}"
+
+# Copier renders temporary old/new trees while calculating an update. Post-
+# migrations run once in the actual repository after that merge is complete.
+_migrations:
+  - command: "npx --yes @fission-ai/openspec@1.11.0 update"
+  - command: "npx --yes @intellectronica/ruler@0.3.44 apply --local-only --skills --no-backup --gitignore=false --agents agentsmd,{{ agents | join(',') }}"
+  - command: "node .agent-standard/scripts/sync-skills.mjs"
+  - command: "node .agent-standard/scripts/sbom.mjs --write"

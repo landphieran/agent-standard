@@ -7,8 +7,13 @@
 project_name: payments-api
 language_stack: py-fastapi
 architecture: service-based
+topology: modular-monolith
 mode: adopt
 gate: advisory
 agents:
   - claude
 ci: false
+bom_format: spdx-json
+bom_gate: advisory
+security_profile: baseline
+release_attestations: false

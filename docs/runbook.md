@@ -1,93 +1,73 @@
-# Runbook
+# Adoption and update runbook
 
-How to stand up agent-standard — as a new repository, or into an existing one — and how
-to keep it current. Two paths; both take a few minutes.
+## Prerequisites
 
-## Prerequisites (once per machine)
+- Git 2.27+
+- Node 22+
+- `uv` with ephemeral `uvx copier`, or Copier 9+
 
-- **Git** ≥ 2.27
-- **Python** ≥ 3.10 with **Copier** — `uv tool install copier` (or `pipx install copier`).
-  You can also run it ephemerally with `uvx copier ...`.
-- **Node** ≥ 20 — for OpenSpec, ruler, and the gate (all invoked via `npx`, no global install).
+Copier tasks execute pinned OpenSpec and Ruler commands, so copy/update requires `--trust`.
 
-Copier runs shell tasks (OpenSpec + ruler), so every command below passes **`--trust`**.
-
-## Path A — a new repository (greenfield)
+## Greenfield repository
 
 ```bash
-# 1. render the paved path (pick a stack + architecture when prompted, or use an example)
-copier copy --trust gh:landphieran/agent-standard ./my-service
-#    or non-interactively:
-#    copier copy --trust --data-file examples/2-ts-node-service-strict.yml \
-#      gh:landphieran/agent-standard ./my-service
-
-cd my-service
-
-# 2. commit what was generated (Copier + OpenSpec + ruler have written the repo)
-git init && git add -A && git commit -m "chore: scaffold with agent-standard"
-
-# 3. install deps and confirm the suite is green
-#    Python:      uv sync && uv run pytest
-#    TS Node/Next: npm install && npm test
-
-# 4. (if ci: true) make .github/workflows/dod.yml a REQUIRED check on your protected branch
+uvx copier copy --trust gh:landphieran/agent-standard ./my-service
+cd ./my-service
 ```
 
-You now have: the OpenSpec process (`openspec/`), one rulebook fanned out to your agents
-(`CLAUDE.md` / `AGENTS.md` from `.ruler/`), a skeleton in your chosen architecture, and the
-definition-of-done gate wired locally and in CI.
-
-## Path B — an existing repository (adopt)
+Install before committing so CI's locked install has a lockfile:
 
 ```bash
-# from the root of your existing repo (commit or stash first)
-copier copy --trust --data-file examples/1-py-fastapi-adopt-advisory.yml \
-  gh:landphieran/agent-standard .
+# TypeScript
+npm install
+npm run sbom
+npm run agent:verify
+
+# Python
+uv sync
+node .agent-standard/scripts/sbom.mjs --write
+node .agent-standard/scripts/doctor.mjs
 ```
 
-`mode: adopt` writes **no skeleton** — it only adds the standard's wiring: `.ruler/`, the
-gate, the CI workflow, and OpenSpec. Then:
+Then initialize Git and commit all generated files, including `AGENTS.md`, `CLAUDE.md`, client skill copies, the dependency lockfile, and the selected BOM file(s).
+
+## Existing repository
+
+Commit or stash current work, then render an adoption configuration into the repository:
 
 ```bash
-# review what landed — especially .claude/settings.json (the stop hook) and .gitignore
-git add -A && git commit -m "chore: adopt agent-standard"
+uvx copier copy --trust --data-file path/to/adopt-answers.yml gh:landphieran/agent-standard .
 ```
 
-Start in **`gate: advisory`** (as example 1 does) so the gate reports without blocking
-while your team gets used to it, then re-render with `gate: strict` when ready.
+Start with advisory gates. Map `.agent-standard/gate.json` commands and globs to the repository's real test/lint/build entry points. Merge an existing `.claude/settings.json` carefully. Add the generated documentation routes to existing indexes, refresh the SBOM from the installed lockfile, run the doctor, and commit all adopted artifacts.
 
-> Adopt note: if you already have a `.claude/settings.json`, Copier will flag the conflict
-> on render — merge the `hooks.Stop` entry into your existing file rather than overwriting.
+Move to strict only after the baseline is green and the CI jobs are required by a ruleset.
 
-## Verify the gate actually blocks (do this once)
+## Verify failure behavior once
+
+Change a source file without a test and run:
 
 ```bash
-# change source without a test, then run the gate as Claude Code would:
-echo '{}' | node .claude/hooks/dod.mjs        # strict → prints a {"decision":"block"} JSON
+echo '{}' | node .claude/hooks/dod.mjs
 ```
 
-Add a matching test in the right location and it exits cleanly. This is the whole point —
-see it fail once so you trust it.
+Strict mode returns a Claude block decision. Add a recognised test and rerun. For a legitimate exception, add an owned, reasoned, expiring path waiver and have it reviewed.
 
-## Staying current
-
-The standard evolves; pull its improvements without losing your work:
+## Update
 
 ```bash
 copier update --trust
 ```
 
-Copier re-renders from the recorded answers, 3-way-merges against your changes, and re-runs
-`ruler apply` (regenerating `CLAUDE.md`/`AGENTS.md`) and `openspec update`. Your code,
-`openspec/` content, and generated agent files are preserved. Resolve any merge markers,
-run the tests, and commit.
+After the three-way merge:
 
-## Day-to-day (what the standard asks of every change)
+1. Review Copier conflicts and manifest changes.
+2. Reinstall if dependency manifests changed.
+3. Run the manifest `updateBom` command.
+4. Run the manifest `verify` command.
+5. Confirm Ruler outputs and propagated skills are tracked.
+6. Review the entire generated diff and commit it as one standard update.
 
-1. Capture the change as an OpenSpec spec → plan → tasks (don't skip to code).
-2. Build it against `ARCHITECTURE.md`.
-3. Write tests in the right location and type for your stack.
-4. "Done" is when the gate passes — locally on stop, and required in CI.
+## GitHub enforcement
 
-Reference: [configuration.md](configuration.md) for every option, [architecture.md](architecture.md)
-for how the pieces fit.
+After the first pushed workflows pass, create a branch ruleset that requires `definition-of-done`, `dependency-review`, and—under the hardened profile—CodeQL. Require pull requests, stale-review dismissal, conversation resolution, linear history if desired, and code-owner review for standard/security paths. See [github-hardening.md](github-hardening.md); repository settings are intentionally not mutated by Copier.

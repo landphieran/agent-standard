@@ -6,9 +6,14 @@
 project_name: web-app
 language_stack: ts-next
 architecture: clean-layered
+topology: single-deployable
 mode: greenfield
 gate: strict
 agents:
   - claude
   - copilot
 ci: true
+bom_format: both
+bom_gate: strict
+security_profile: hardened
+release_attestations: true

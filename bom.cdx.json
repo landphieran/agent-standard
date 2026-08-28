@@ -1,0 +1,23 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-28T06:33:47.480Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "agent-standard",
+          "version": "0.6.0-dev"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "name": "agent-standard",
+      "version": "0.1.0"
+    }
+  },
+  "components": []
+}

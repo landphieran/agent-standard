@@ -1,0 +1,54 @@
+{
+  "$schema": "./manifest.schema.json",
+  "schemaVersion": 1,
+  "standardVersion": "0.6.0-dev",
+  "conformanceLevel": "AS-3",
+  "project": {
+    "name": "{{ project_name }}",
+    "packageName": "{{ pkg }}",
+    "stack": "{{ language_stack }}",
+    "architecture": "{{ architecture }}",
+    "topology": "{{ topology }}",
+    "mode": "{{ mode }}"
+  },
+  "agents": [{% for agent in agents %}"{{ agent }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "commands": {
+{%- if language_stack in ['ts-node', 'ts-next'] %}
+    "install": "npm install",
+    "verify": "npm run agent:verify",
+    "updateBom": "npm run sbom"
+{%- else %}
+    "install": "uv sync",
+    "verify": "uv run python -c \"pass\" && node .agent-standard/scripts/doctor.mjs",
+    "updateBom": "node .agent-standard/scripts/sbom.mjs --write"
+{%- endif %}
+  },
+  "documents": [
+    "README.md",
+{% if mode == 'greenfield' -%}
+    "ARCHITECTURE.md",
+{% endif -%}
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "docs/README.md",
+    "docs/decisions/README.md",
+    "docs/runbooks/README.md",
+    "docs/testing.md",
+    "docs/topology.md"
+  ],
+  "skills": ["plan-change", "create-adr", "maintain-docs", "self-review", "security-review"],
+  "qualityGate": {
+    "mode": "{{ gate }}",
+    "ci": {{ ci | lower }},
+    "waivers": ".agent-standard/waivers.json"
+  },
+  "supplyChain": {
+    "securityProfile": "{{ security_profile }}",
+    "releaseAttestations": {{ release_attestations | lower }},
+    "bom": {
+      "mode": "{{ bom_gate }}",
+      "formats": [{% if bom_format in ['cyclonedx-json', 'both'] %}"cyclonedx-json"{% endif %}{% if bom_format == 'both' %}, {% endif %}{% if bom_format in ['spdx-json', 'both'] %}"spdx-json"{% endif %}],
+      "files": [{% if bom_format in ['cyclonedx-json', 'both'] %}"bom.cdx.json"{% endif %}{% if bom_format == 'both' %}, {% endif %}{% if bom_format in ['spdx-json', 'both'] %}"bom.spdx.json"{% endif %}]
+    }
+  }
+}

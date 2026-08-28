@@ -6,6 +6,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .vitest/
+.next/
+playwright-report/
+test-results/
 
 # Env / local
 .env
@@ -15,3 +18,8 @@ __pycache__/
 # Personal agent settings — never commit
 .claude/settings.local.json
 {% endif -%}
+
+# Generated build SBOMs are CI artifacts. The canonical repository SBOM(s)
+# (`bom.cdx.json` / `bom.spdx.json`) are intentionally tracked.
+build.bom.*.json
+release.bom.*.json

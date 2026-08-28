@@ -8,14 +8,14 @@ copier copy --trust --data-file examples/2-ts-node-service-strict.yml \
   gh:landphieran/agent-standard ./my-repo
 ```
 
-| # | File | Stack | Architecture | Mode | Gate | Agents | CI |
-|---|---|---|---|---|---|---|---|
-| 1 | `1-py-fastapi-adopt-advisory.yml` | Python FastAPI | service-based | **adopt** | **advisory** | claude | off |
-| 2 | `2-ts-node-service-strict.yml` | TS Node | service-based | greenfield | strict | all 3 | on |
-| 3 | `3-ts-next-clean-strict.yml` | TS Next.js | clean-layered | greenfield | strict | claude, copilot | on |
-| 4 | `4-py-fastapi-clean-strict.yml` | Python FastAPI | clean-layered | greenfield | strict | claude, codex | on |
+| # | Stack / mode | Architecture / topology | Gate / BOM | Security |
+|---|---|---|---|---|
+| 1 | Python FastAPI / adopt | service-based / modular monolith | advisory / SPDX advisory | baseline, no CI |
+| 2 | TS Node / greenfield | service-based / modular monolith | strict / CycloneDX strict | hardened |
+| 3 | Next.js / greenfield | clean-layered / single deployable | strict / both strict | hardened + release attestations |
+| 4 | Python FastAPI / greenfield | clean-layered / distributed services | strict / SPDX strict | hardened |
 
 They are chosen to exercise the whole surface: both languages, all three stacks, both
-architectures, both modes (adopt vs greenfield), both gate behaviours (advisory vs
-strict), single vs multi-agent, and CI on/off. See [../docs/configuration.md](../docs/configuration.md)
+architectures, all topologies, both modes, both gate behaviours, both BOM formats,
+single vs multi-agent, CI on/off, and optional attestations. See [../docs/configuration.md](../docs/configuration.md)
 for what each option does.

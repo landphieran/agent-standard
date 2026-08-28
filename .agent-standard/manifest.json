@@ -1,0 +1,28 @@
+{
+  "$schema": "../template/.agent-standard/manifest.schema.json",
+  "schemaVersion": 1,
+  "standardVersion": "0.6.0-dev",
+  "conformanceLevel": "AS-3",
+  "project": {
+    "name": "agent-standard",
+    "packageName": "agent-standard",
+    "stack": "ts-node",
+    "architecture": "service-based",
+    "topology": "single-deployable",
+    "mode": "adopt"
+  },
+  "agents": ["codex", "claude", "copilot"],
+  "commands": {
+    "install": "npm install",
+    "verify": "npm test",
+    "updateBom": "npm run sbom"
+  },
+  "documents": ["README.md", "AGENTS.md", "SECURITY.md", "CONTRIBUTING.md", "docs/architecture.md", "docs/configuration.md", "docs/runbook.md"],
+  "skills": ["plan-change", "create-adr", "maintain-docs", "self-review", "security-review"],
+  "qualityGate": { "mode": "strict", "ci": true, "waivers": ".agent-standard/waivers.json" },
+  "supplyChain": {
+    "securityProfile": "baseline",
+    "releaseAttestations": false,
+    "bom": { "mode": "strict", "formats": ["cyclonedx-json"], "files": ["bom.cdx.json"] }
+  }
+}

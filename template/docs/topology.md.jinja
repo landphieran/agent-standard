@@ -1,0 +1,21 @@
+---
+id: DEPLOYMENT-TOPOLOGY
+type: standard
+status: active
+owner: maintainers
+scope: deployment
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Deployment topology
+
+This repository uses `{{ topology }}` topology and `{{ architecture }}` internal architecture. Those are separate decisions: topology defines deployable boundaries; architecture defines dependencies inside each boundary.
+
+{% if topology == 'single-deployable' -%}
+There is one deployable unit. Keep internal boundaries explicit so deployment simplicity does not become unstructured coupling.
+{% elif topology == 'modular-monolith' -%}
+Capability modules share one deployment but own their contracts and data access. The module dependency graph is acyclic; cross-module access goes through public interfaces.
+{% else -%}
+Services deploy independently. Each service owns its data, compatibility policy, operational health, and release lifecycle. Network calls require timeouts, retry budgets, idempotency where applicable, and observable failure handling.
+{% endif %}

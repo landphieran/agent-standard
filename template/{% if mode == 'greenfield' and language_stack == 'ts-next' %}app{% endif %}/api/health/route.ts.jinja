@@ -1,6 +1,6 @@
 // Next.js route handler (App Router) — the adapter over the health capability.
 import { NextResponse } from 'next/server'
-import { healthStatus } from '../../../src/health'
+import { healthStatus } from '@/src/health'
 
 export function GET () {
   return NextResponse.json(healthStatus())

@@ -1,0 +1,17 @@
+## Outcome
+
+Describe the user or system outcome{% if workflow_profile == 'spec-driven' %} and link the OpenSpec change{% else %}, link the Azure Boards work item, and state the acceptance criteria{% endif %}.
+
+<!-- agent-standard:start -->
+## Agent-standard checks
+
+- [ ] {% if workflow_profile == 'spec-driven' %}The OpenSpec change is linked and validates.{% else %}Acceptance criteria are stated and satisfied.{% endif %}
+- [ ] Tests cover the behavior, or an owned expiring waiver is included.
+- [ ] Documentation and ADRs are current.
+- [ ] Dependency changes include the lockfile and refreshed SBOM.
+- [ ] The manifest verification command passes.
+<!-- agent-standard:end -->
+
+## Risk and rollback
+
+Describe trust-boundary, data, deployment, compatibility, and rollback implications. Write "none" only after checking them.

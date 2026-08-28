@@ -6,7 +6,7 @@
 setup_profile: advanced
 project_name: web-app
 language_stack: ts-next
-codeowners: "@example/web"
+owners: "@example/web"
 architecture: clean-layered
 topology: single-deployable
 mode: greenfield

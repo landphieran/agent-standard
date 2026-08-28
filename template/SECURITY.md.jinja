@@ -2,13 +2,15 @@
 
 ## Reporting
 
-Report suspected vulnerabilities privately to {{ codeowners }} using GitHub private vulnerability reporting or the team's approved security channel. Do not include secrets, exploit payloads, personal data, or unredacted production logs in a public issue.
+Report suspected vulnerabilities privately to {{ owners }} {% if repository_platform == 'github' %}using GitHub private vulnerability reporting or the team's approved security channel{% else %}through the team's approved private security channel{% endif %}. Do not include secrets, exploit payloads, personal data, or unredacted production logs in a public work item.
 
 ## Required engineering controls
 
 - Treat all external input and agent/tool output as untrusted data.
 - Keep credentials out of source, prompts, logs, fixtures, and committed agent configuration.
-- Use least-privilege workflow permissions and pinned GitHub Action commit SHAs.
+- Use least-privilege pipeline permissions and immutable external workflow references.{% if repository_platform == 'github' %} GitHub Actions are pinned to full commit SHAs.{% else %} Central Azure Pipeline templates are pinned to full commit SHAs.{% endif %}
+{% if repository_platform == 'azure-devops' and security_profile == 'hardened' %}- Keep Azure DevOps Code Security, Secret Protection, and secret push protection enabled; the repository auditor verifies that external state.
+{% endif -%}
 - Update and commit the configured SBOM after dependency changes; CI validates its package identities.
 - Use `.agent-standard/waivers.json` only for time-bounded, owned exceptions with a concrete reason.
 

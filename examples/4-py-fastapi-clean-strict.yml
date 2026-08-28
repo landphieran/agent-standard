@@ -7,7 +7,7 @@
 setup_profile: advanced
 project_name: ledger-api
 language_stack: py-fastapi
-codeowners: "@example/ledger"
+owners: "@example/ledger"
 architecture: clean-layered
 topology: distributed-services
 mode: greenfield

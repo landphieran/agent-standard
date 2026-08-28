@@ -2,6 +2,6 @@
 
 Report suspected vulnerabilities privately to the repository owner. Do not put secrets, exploit payloads, personal data, or unredacted production logs in a public issue.
 
-The template standardizes least-privilege Actions permissions, commit-pinned actions, dependency review, optional CodeQL, a committed CycloneDX/SPDX SBOM, and optional release attestations. These controls still require repository rulesets and organization policy to make their checks mandatory.
+The template standardizes provider-native CI gates, immutable external workflow references, dependency/code scanning, a committed CycloneDX/SPDX SBOM, and optional GitHub release attestations. GitHub rulesets or Azure Repos branch policies and organization security settings are still required to make generated checks mandatory.
 
 Only the default branch is supported until the project publishes its first release.

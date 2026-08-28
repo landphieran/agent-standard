@@ -14,17 +14,23 @@ Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collision
 | `project_name` | string | Human name and derived import/package slug; path separators are rejected |
 | `language_stack` | `ts-node`, `ts-next`, `py-fastapi` | Skeleton, rules, commands, globs, CI setup, and dependency discovery |
 | `mode` | `greenfield`, `adopt` | Scaffold source/config files or preserve and integrate with an existing repository |
-| `codeowners` | GitHub users/teams | Required; owns standard, workflow, and security paths |
+| `repository_platform` | `github`, `azure-devops` | `github` for direct Copier use; the recommended installer detects the origin and supports `--scm` override |
+| `owners` | `@owner` aliases | Required portable ownership intent; rendered into CODEOWNERS on GitHub and the Azure adapter contract on Azure DevOps |
 | `architecture` | `service-based`, `clean-layered` | Chosen for greenfield; `service-based` default during standard adoption |
 | `topology` | `single-deployable`, `modular-monolith`, `distributed-services` | `modular-monolith`; kept separate from code architecture |
 | `workflow_profile` | `lightweight`, `spec-driven` | `lightweight`; proportional native plans or the full OpenSpec lifecycle |
 | `gate` | `strict`, `advisory` | `strict`; whether Definition-of-Done findings block |
 | `agents` | `claude`, `codex`, `copilot` | All three; root `AGENTS.md` is always emitted |
 | `ci` | boolean | `true`; emits verification and supply-chain workflows |
+| `azure_pipeline_mode` | `standalone`, `extends` | `standalone`; `extends` delegates CI to an immutable organization template |
+| `azure_default_branch` | safe branch name | `main`; target for Azure Repos build-validation and review policies |
+| `azure_template_repository` | `Project/Repository` | Central Azure Repos template location; extends mode only |
+| `azure_template_ref` | 40-character commit SHA | Required immutable central-template revision; extends mode only |
+| `azure_template_path` | repository-relative YAML path | `templates/agent-standard.yml`; extends mode only |
 | `bom_format` | `cyclonedx-json`, `spdx-json`, `both` | `cyclonedx-json` |
 | `bom_gate` | `strict`, `advisory` | `strict`; missing, invalid, or dependency-stale BOM behavior |
-| `security_profile` | `baseline`, `hardened` | `hardened`; adds CodeQL to dependency controls |
-| `release_attestations` | boolean | `false`; opt in only after defining a releasable subject |
+| `security_profile` | `baseline`, `hardened` | `hardened`; baseline keeps provider dependency review/scanning, while hardened adds code and secret protections |
+| `release_attestations` | boolean | `false`; opt in only after defining a releasable subject; currently implemented only by the GitHub adapter |
 
 ## Derived toolchain
 
@@ -32,7 +38,7 @@ The manifest records `project.packageManager`: npm for TypeScript and uv for Pyt
 
 ## Project manifest
 
-`.agent-standard/manifest.json` is the machine-readable source of truth for selected settings, target and current conformance state, commands, governed documents, skills, waivers, and supply-chain policy. Its schema is committed beside it. Tool-specific configuration should be derived from or checked against this contract instead of creating another repository registry.
+`.agent-standard/manifest.json` is the machine-readable source of truth for selected settings, target and current conformance state, repository/CI platform, commands, governed documents, skills, waivers, and supply-chain policy. Its schema is committed beside it. Provider-specific desired state lives under `.agent-standard/platforms/` and is checked against the portable manifest instead of creating a competing repository registry.
 
 ## Workflow profiles
 
@@ -59,4 +65,8 @@ A waiver applies only while unexpired and only when every changed source path ma
 
 ## Adoption ownership boundary
 
-Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the delimited CODEOWNERS and pull-request checklist blocks plus the exact Claude hook command. Future updates use Copier’s three-way merge and must be reviewed like source changes.
+Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the provider-appropriate delimited ownership/review blocks plus the exact Claude hook command. Future updates use Copier’s three-way merge and must be reviewed like source changes.
+
+Azure DevOps implementation and one-time administrator steps are documented in [azure-devops.md](azure-devops.md). Azure workload deployment configuration is intentionally a separate future profile; choosing Azure Repos must not silently introduce subscriptions, service connections, or cloud resources.
+
+The rendered Azure adapter starts with `pipeline.definitionId: null` because Azure assigns that ID only after pipeline creation. Recording the assigned positive ID is the one intentional post-create configuration step; the remote auditor then proves that the blocking branch policy points to that exact pipeline rather than merely any successful build.

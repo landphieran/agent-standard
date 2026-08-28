@@ -1,0 +1,49 @@
+{
+  "$schema": "./azure-devops.schema.json",
+  "schemaVersion": 1,
+  "service": "azure-devops-services",
+  "defaultBranch": {{ azure_default_branch | tojson }},
+  "pipeline": {
+    "mode": "{% if ci %}{{ azure_pipeline_mode }}{% else %}none{% endif %}",
+    "path": "azure-pipelines.yml",
+    "definitionId": null,
+    "template": {% if ci and azure_pipeline_mode == 'extends' %}{
+      "repository": {{ azure_template_repository | tojson }},
+      "ref": {{ azure_template_ref | tojson }},
+      "path": {{ azure_template_path | tojson }}
+    }{% else %}null{% endif %}
+  },
+  "ownership": {
+    "aliases": [{% for owner in owners.split() %}{{ owner | tojson }}{% if not loop.last %}, {% endif %}{% endfor %}],
+    "requiredReviewerIds": []
+  },
+  "branchPolicies": {
+    "minimumReviewers": 1,
+    "creatorVoteCounts": false,
+    "allowDownvotes": false,
+    "resetVotesOnPush": true,
+    "requireDesignatedReviewers": true,
+    "requireLinkedWorkItems": true,
+    "requireCommentResolution": true,
+    "buildValidation": {
+      "required": {{ ci | lower }},
+      "manualQueueOnly": false,
+      "queueOnSourceUpdateOnly": false,
+      "validDurationMinutes": 0
+    },
+    "securityStatusCheck": {
+      "required": {{ ci | lower }},
+      "genre": "AdvancedSecurity",
+      "name": "NewHighAndCritical",
+      "invalidateOnSourceUpdate": true,
+      "applicability": "default"
+    }
+  },
+  "advancedSecurity": {
+    "codeSecurity": {{ ci | lower }},
+    "dependencyScanning": {{ ci | lower }},
+    "codeql": {{ (security_profile == 'hardened') | lower }},
+    "secretProtection": {{ (security_profile == 'hardened') | lower }},
+    "secretPushProtection": {{ (security_profile == 'hardened') | lower }}
+  }
+}

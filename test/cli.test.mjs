@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertSupportedToolchain, changedFiles } from '../bin/agent-standard.mjs'
+import { assertSupportedToolchain, changedFiles, detectRepositoryPlatform } from '../bin/agent-standard.mjs'
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -61,6 +61,21 @@ test('npm and uv toolchains pass the minimum-standard preflight', t => {
 
   assert.doesNotThrow(() => assertSupportedToolchain(npmRoot, 'ts-node'))
   assert.doesNotThrow(() => assertSupportedToolchain(uvRoot, 'py-fastapi'))
+})
+
+test('repository platform detection recognizes Azure DevOps and permits an explicit override', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-platform-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const git = args => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+  git(['init', '-q'])
+  git(['remote', 'add', 'origin', 'https://dev.azure.com/acme/platform/_git/service'])
+
+  assert.equal(detectRepositoryPlatform(root), 'azure-devops')
+  assert.equal(detectRepositoryPlatform(root, 'github'), 'github')
+  assert.throws(() => detectRepositoryPlatform(root, 'gitlab'), /unsupported repository platform/)
+
+  git(['remote', 'set-url', 'origin', 'git@github.com:acme/service.git'])
+  assert.equal(detectRepositoryPlatform(root), 'github')
 })
 
 test('the npm-installed bin entry point executes through its package shim', () => {

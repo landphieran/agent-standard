@@ -6,7 +6,7 @@
 setup_profile: advanced
 project_name: orders-service
 language_stack: ts-node
-codeowners: "@example/orders"
+owners: "@example/orders"
 architecture: service-based
 topology: modular-monolith
 mode: greenfield

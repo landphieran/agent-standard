@@ -161,6 +161,18 @@ function checkManifest (manifest, gate) {
   oneOf(manifest.workflow?.profile, ['lightweight', 'spec-driven'], 'workflow.profile')
   const expectedEngine = manifest.workflow?.profile === 'spec-driven' ? 'openspec' : 'native'
   if (manifest.workflow?.engine !== expectedEngine) note(`manifest workflow.engine must be ${expectedEngine}`)
+  oneOf(manifest.platform?.repository, ['github', 'azure-devops'], 'platform.repository')
+  const expectedCi = !manifest.qualityGate?.ci
+    ? 'none'
+    : manifest.platform?.repository === 'azure-devops' ? 'azure-pipelines' : 'github-actions'
+  if (manifest.platform?.ci !== expectedCi) note(`manifest platform.ci must be ${expectedCi}`)
+  oneOf(manifest.platform?.pipelineMode, ['none', 'standalone', 'extends'], 'platform.pipelineMode')
+  const allowedPipelineModes = !manifest.qualityGate?.ci
+    ? ['none']
+    : manifest.platform?.repository === 'azure-devops' ? ['standalone', 'extends'] : ['standalone']
+  if (!allowedPipelineModes.includes(manifest.platform?.pipelineMode)) {
+    note(`manifest platform.pipelineMode must be ${allowedPipelineModes.join(' or ')}`)
+  }
 
   if (uniqueStrings(manifest.agents, 'agents')) {
     for (const agent of manifest.agents) oneOf(agent, ['claude', 'codex', 'copilot'], `agent ${agent}`)
@@ -172,8 +184,8 @@ function checkManifest (manifest, gate) {
   if (uniqueStrings(manifest.skills, 'skills')) {
     for (const skill of manifest.skills) if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill)) note(`manifest skill name is invalid: ${skill}`)
   }
-  if (!/^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/.test(manifest.governance?.codeowners || '')) {
-    note('manifest governance.codeowners must contain GitHub users or teams')
+  if (!/^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/.test(manifest.governance?.owners || '')) {
+    note('manifest governance.owners must contain valid owner aliases')
   }
   for (const name of ['install', 'verify', 'updateBom']) {
     if (typeof manifest.commands?.[name] !== 'string' || !manifest.commands[name].trim()) note(`manifest commands.${name} is required`)
@@ -192,6 +204,9 @@ function checkManifest (manifest, gate) {
   if (typeof manifest.supplyChain?.releaseAttestations !== 'boolean') note('manifest supplyChain.releaseAttestations must be boolean')
   if (manifest.supplyChain?.securityProfile === 'hardened' && !manifest.qualityGate?.ci) note('the hardened security profile requires CI')
   if (manifest.supplyChain?.releaseAttestations && !manifest.qualityGate?.ci) note('release attestations require CI')
+  if (manifest.supplyChain?.releaseAttestations && manifest.platform?.repository === 'azure-devops') {
+    note('release attestations are not implemented by the minimum Azure DevOps adapter')
+  }
   oneOf(manifest.supplyChain?.bom?.mode, ['strict', 'advisory'], 'supplyChain.bom.mode')
   if (uniqueStrings(manifest.supplyChain?.bom?.formats, 'supplyChain.bom.formats')) {
     for (const format of manifest.supplyChain.bom.formats) oneOf(format, ['cyclonedx-json', 'spdx-json'], `BOM format ${format}`)
@@ -211,15 +226,7 @@ function checkManifest (manifest, gate) {
 }
 
 function checkManagedConfiguration (manifest) {
-  const owner = manifest.governance?.codeowners
-  const codeownersPath = resolve(root, '.github/CODEOWNERS')
-  if (existsSync(codeownersPath)) {
-    const text = readFileSync(codeownersPath, 'utf8').replace(/^\uFEFF/, '')
-    if (!text.includes('# agent-standard:start') || !text.includes('# agent-standard:end')) note('CODEOWNERS is missing the managed agent-standard block')
-    for (const pattern of ['/.github/workflows/', '/.agent-standard/', '/.ruler/', '/AGENTS.md', '/SECURITY.md']) {
-      if (!text.split(/\r?\n/).some(line => line.startsWith(`${pattern} `) && line.includes(owner))) note(`CODEOWNERS is missing managed ownership for ${pattern}`)
-    }
-  }
+  const owner = manifest.governance?.owners
 
   if (manifest.agents?.includes('claude') && existsSync(resolve(root, '.claude/settings.json'))) {
     try {
@@ -231,33 +238,147 @@ function checkManagedConfiguration (manifest) {
     } catch (error) { note(`.claude/settings.json is invalid JSON: ${error.message}`) }
   }
 
-  if (!setup && existsSync(resolve(root, '.github/dependabot.yml'))) {
-    const text = readFileSync(resolve(root, '.github/dependabot.yml'), 'utf8')
-    const hasEcosystem = ecosystem => new RegExp(`package-ecosystem:\\s*["']?${ecosystem}["']?`).test(text)
-    if (!hasEcosystem('github-actions')) note('Dependabot must update GitHub Actions')
-    const expected = manifest.project?.packageManager === 'uv' ? 'pip' : 'npm'
-    if (!hasEcosystem(expected)) note(`Dependabot must update the ${expected} ecosystem`)
+  if (manifest.platform?.repository === 'github') {
+    const codeownersPath = resolve(root, '.github/CODEOWNERS')
+    if (existsSync(codeownersPath)) {
+      const text = readFileSync(codeownersPath, 'utf8').replace(/^\uFEFF/, '')
+      if (!text.includes('# agent-standard:start') || !text.includes('# agent-standard:end')) note('CODEOWNERS is missing the managed agent-standard block')
+      for (const pattern of ['/.github/workflows/', '/.agent-standard/', '/.ruler/', '/AGENTS.md', '/SECURITY.md']) {
+        if (!text.split(/\r?\n/).some(line => line.startsWith(`${pattern} `) && line.includes(owner))) note(`CODEOWNERS is missing managed ownership for ${pattern}`)
+      }
+    }
+
+    if (!setup && existsSync(resolve(root, '.github/dependabot.yml'))) {
+      const text = readFileSync(resolve(root, '.github/dependabot.yml'), 'utf8')
+      const hasEcosystem = ecosystem => new RegExp(`package-ecosystem:\\s*["']?${ecosystem}["']?`).test(text)
+      if (!hasEcosystem('github-actions')) note('Dependabot must update GitHub Actions')
+      const expected = manifest.project?.packageManager === 'uv' ? 'pip' : 'npm'
+      if (!hasEcosystem(expected)) note(`Dependabot must update the ${expected} ecosystem`)
+    }
+
+    const pullRequestPath = resolve(root, '.github/pull_request_template.md')
+    if (existsSync(pullRequestPath)) {
+      const text = readFileSync(pullRequestPath, 'utf8')
+      if (!text.includes('<!-- agent-standard:start -->') || !text.includes('<!-- agent-standard:end -->')) {
+        note('pull request template is missing the managed agent-standard checklist')
+      }
+    }
+
+    const workflows = [
+      ...(manifest.qualityGate?.ci ? ['dod.yml', 'dependency-review.yml'] : []),
+      ...(manifest.qualityGate?.ci && manifest.supplyChain?.securityProfile === 'hardened' ? ['codeql.yml'] : []),
+      ...(manifest.supplyChain?.releaseAttestations ? ['release-attest.yml'] : [])
+    ]
+    for (const name of workflows) {
+      const path = resolve(root, '.github/workflows', name)
+      if (!existsSync(path)) continue
+      const text = readFileSync(path, 'utf8')
+      for (const match of text.matchAll(/uses:\s*[^@\s]+@([^\s#]+)/g)) {
+        if (!/^[a-f0-9]{40}$/.test(match[1])) note(`.github/workflows/${name} uses a mutable Action reference: ${match[0]}`)
+      }
+    }
+    return
   }
 
-  const pullRequestPath = resolve(root, '.github/pull_request_template.md')
-  if (existsSync(pullRequestPath)) {
-    const text = readFileSync(pullRequestPath, 'utf8')
-    if (!text.includes('<!-- agent-standard:start -->') || !text.includes('<!-- agent-standard:end -->')) {
-      note('pull request template is missing the managed agent-standard checklist')
+  if (manifest.platform?.repository !== 'azure-devops') return
+  const adapter = json('.agent-standard/platforms/azure-devops.json')
+  if (adapter) {
+    if (adapter.$schema !== './azure-devops.schema.json') note('Azure DevOps adapter must reference its committed schema')
+    if (adapter.schemaVersion !== 1) note('Azure DevOps adapter schemaVersion must be 1')
+    if (adapter.service !== 'azure-devops-services') note('Azure DevOps adapter service must be azure-devops-services')
+    if (typeof adapter.defaultBranch !== 'string' || !adapter.defaultBranch || adapter.defaultBranch.startsWith('/') || adapter.defaultBranch.startsWith('-') || adapter.defaultBranch.endsWith('/') || /[\s~^:\\]/.test(adapter.defaultBranch) || adapter.defaultBranch.includes('..')) {
+      note('Azure DevOps adapter defaultBranch is invalid')
+    }
+    const aliases = owner?.split(/\s+/).filter(Boolean) || []
+    if (!Array.isArray(adapter.ownership?.aliases) || adapter.ownership.aliases.join('\n') !== aliases.join('\n')) {
+      note('Azure DevOps adapter ownership aliases must match manifest governance.owners')
+    }
+    if (!Array.isArray(adapter.ownership?.requiredReviewerIds) ||
+        adapter.ownership.requiredReviewerIds.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(id)) ||
+        new Set(adapter.ownership?.requiredReviewerIds || []).size !== adapter.ownership?.requiredReviewerIds?.length) {
+      note('Azure DevOps adapter requiredReviewerIds must be a unique array of Azure identity UUIDs')
+    }
+    if (adapter.pipeline?.mode !== manifest.platform.pipelineMode) note('Azure DevOps adapter pipeline mode does not match the manifest')
+    if (adapter.pipeline?.path !== 'azure-pipelines.yml') note('Azure DevOps adapter pipeline path must be azure-pipelines.yml')
+    if (adapter.pipeline?.definitionId !== null && (!Number.isInteger(adapter.pipeline?.definitionId) || adapter.pipeline.definitionId < 1)) {
+      note('Azure DevOps adapter pipeline definitionId must be null before creation or a positive integer')
+    }
+    if (adapter.pipeline?.mode === 'extends') {
+      const template = adapter.pipeline.template
+      if (!template || !/^[^/:\\]+\/[^/:\\]+$/.test(template.repository || '') || !/^[a-f0-9]{40}$/.test(template.ref || '') || /^0{40}$/.test(template.ref) ||
+          typeof template.path !== 'string' || template.path.startsWith('/') || template.path.includes('..') || template.path.includes('\\') || !/\.ya?ml$/.test(template.path)) {
+        note('Azure DevOps extends mode requires safe template coordinates and an immutable 40-character ref')
+      }
+    } else if (adapter.pipeline?.template !== null) note('Azure DevOps adapter template must be null outside extends mode')
+    const policies = adapter.branchPolicies || {}
+    if (!Number.isInteger(policies.minimumReviewers) || policies.minimumReviewers < 1) note('Azure DevOps requires at least one reviewer')
+    if (policies.creatorVoteCounts !== false) note('Azure DevOps must not count the creator vote')
+    if (policies.allowDownvotes !== false) note('Azure DevOps must not allow completion while reviewers reject or wait')
+    if (policies.resetVotesOnPush !== true) note('Azure DevOps must reset reviewer votes on new pushes')
+    if (policies.requireDesignatedReviewers !== true) note('Azure DevOps must require a designated owner or security reviewer')
+    if (policies.requireLinkedWorkItems !== true) note('Azure DevOps must require linked work items')
+    if (policies.requireCommentResolution !== true) note('Azure DevOps must require comment resolution')
+    if (policies.buildValidation?.required !== Boolean(manifest.qualityGate?.ci)) note('Azure DevOps build validation policy must match CI enablement')
+    if (policies.buildValidation?.manualQueueOnly !== false || policies.buildValidation?.queueOnSourceUpdateOnly !== false || policies.buildValidation?.validDurationMinutes !== 0) {
+      note('Azure DevOps build validation must queue automatically and expire immediately after protected-branch changes')
+    }
+    const statusCheck = policies.securityStatusCheck
+    if (statusCheck?.required !== Boolean(manifest.qualityGate?.ci) || statusCheck?.genre !== 'AdvancedSecurity' ||
+        !['NewHighAndCritical', 'AllHighAndCritical'].includes(statusCheck?.name) ||
+        statusCheck?.invalidateOnSourceUpdate !== true || statusCheck?.applicability !== 'default') {
+      note('Azure DevOps must require an Advanced Security high/critical status check with safe defaults')
+    }
+    const hardened = manifest.supplyChain?.securityProfile === 'hardened'
+    const expectedSecurity = {
+      codeSecurity: Boolean(manifest.qualityGate?.ci),
+      dependencyScanning: Boolean(manifest.qualityGate?.ci),
+      codeql: hardened,
+      secretProtection: hardened,
+      secretPushProtection: hardened
+    }
+    for (const [feature, required] of Object.entries(expectedSecurity)) {
+      if (adapter.advancedSecurity?.[feature] !== required) note(`Azure DevOps ${feature} must match the CI/security profile`)
     }
   }
 
-  const workflows = [
-    ...(manifest.qualityGate?.ci ? ['dod.yml', 'dependency-review.yml'] : []),
-    ...(manifest.qualityGate?.ci && manifest.supplyChain?.securityProfile === 'hardened' ? ['codeql.yml'] : []),
-    ...(manifest.supplyChain?.releaseAttestations ? ['release-attest.yml'] : [])
-  ]
-  for (const name of workflows) {
-    const path = resolve(root, '.github/workflows', name)
-    if (!existsSync(path)) continue
-    const text = readFileSync(path, 'utf8')
-    for (const match of text.matchAll(/uses:\s*[^@\s]+@([^\s#]+)/g)) {
-      if (!/^[a-f0-9]{40}$/.test(match[1])) note(`.github/workflows/${name} uses a mutable Action reference: ${match[0]}`)
+  const pullRequestPath = resolve(root, '.azuredevops/pull_request_template.md')
+  if (existsSync(pullRequestPath)) {
+    const text = readFileSync(pullRequestPath, 'utf8')
+    if (!text.includes('<!-- agent-standard:start -->') || !text.includes('<!-- agent-standard:end -->')) {
+      note('Azure DevOps pull request template is missing the managed agent-standard checklist')
+    }
+  }
+
+  const pipelinePath = resolve(root, 'azure-pipelines.yml')
+  if (!manifest.qualityGate?.ci || !existsSync(pipelinePath) || (setup && manifest.project?.mode === 'adopt')) return
+  const pipeline = readFileSync(pipelinePath, 'utf8')
+  if (!/^pr:\s*none\s*$/m.test(pipeline)) note('azure-pipelines.yml must disable unsupported Azure Repos YAML PR triggers')
+  if (manifest.platform.pipelineMode === 'standalone') {
+    for (const required of [
+      'fetchDepth: 0',
+      'node .agent-standard/scripts/verify.mjs',
+      'node .agent-standard/scripts/dod.mjs --ci --policy-only',
+      'DOD_BASE: HEAD^1',
+      'version: 22.x'
+    ]) if (!pipeline.includes(required)) note(`azure-pipelines.yml is missing ${required}`)
+    for (const relative of manifest.supplyChain?.bom?.files || []) {
+      if (!pipeline.includes(`targetPath: ${relative}`)) note(`azure-pipelines.yml does not publish ${relative}`)
+    }
+    if (!pipeline.includes('AdvancedSecurity-Dependency-Scanning@1')) note('azure-pipelines.yml is missing AdvancedSecurity-Dependency-Scanning@1')
+    if (manifest.supplyChain?.securityProfile === 'hardened') {
+      for (const task of ['AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Codeql-Analyze@1']) {
+        if (!pipeline.includes(task)) note(`azure-pipelines.yml is missing ${task}`)
+      }
+      if (!/AdvancedSecurity-Codeql-Analyze@1[\s\S]*?WaitForProcessing:\s*true/.test(pipeline)) {
+        note('azure-pipelines.yml must wait for Advanced Security CodeQL result processing')
+      }
+    }
+  } else if (manifest.platform.pipelineMode === 'extends' && adapter) {
+    const template = adapter.pipeline?.template
+    if (template && typeof template.repository === 'string' && typeof template.path === 'string' && /^[a-f0-9]{40}$/.test(template.ref || '') && !/^0{40}$/.test(template.ref)) {
+      for (const required of ['extends:', template.repository, template.ref, `${template.path}@agent_standard_templates`]) {
+        if (!pipeline.includes(required)) note(`azure-pipelines.yml is missing extends contract value ${required}`)
+      }
     }
   }
 }
@@ -275,14 +396,25 @@ function main () {
     'AGENTS.md', '.agent-standard/manifest.schema.json', '.agent-standard/gate.json', '.agent-standard/waivers.json',
     '.agent-standard/scripts/doctor.mjs', '.agent-standard/scripts/dod.mjs', '.agent-standard/scripts/verify.mjs',
     '.agent-standard/scripts/merge-config.mjs', '.agent-standard/scripts/sbom.mjs', '.agent-standard/scripts/sync-skills.mjs',
-    '.agent-standard/copier-answers.yml', '.github/CODEOWNERS', '.github/dependabot.yml', '.github/pull_request_template.md',
+    '.agent-standard/copier-answers.yml',
     ...(Array.isArray(manifest.documents) ? manifest.documents.filter(safeRelative) : [])
   ]
+  if (manifest.platform?.repository === 'github') {
+    required.push('.github/CODEOWNERS', '.github/dependabot.yml', '.github/pull_request_template.md')
+    if (manifest.qualityGate?.ci) required.push('.github/workflows/dod.yml', '.github/workflows/dependency-review.yml')
+    if (manifest.qualityGate?.ci && manifest.supplyChain?.securityProfile === 'hardened') required.push('.github/workflows/codeql.yml')
+    if (manifest.supplyChain?.releaseAttestations) required.push('.github/workflows/release-attest.yml')
+  } else if (manifest.platform?.repository === 'azure-devops') {
+    required.push(
+      '.agent-standard/platforms/azure-devops.json',
+      '.agent-standard/platforms/azure-devops.schema.json',
+      '.agent-standard/scripts/audit-azure-devops.mjs',
+      '.azuredevops/pull_request_template.md'
+    )
+    if (manifest.qualityGate?.ci) required.push('azure-pipelines.yml')
+  }
   if (manifest.agents?.includes('claude')) required.push('CLAUDE.md', '.claude/settings.json')
   if (!setup) required.push(manifest.project?.packageManager === 'uv' ? 'uv.lock' : 'package-lock.json')
-  if (manifest.qualityGate?.ci) required.push('.github/workflows/dod.yml', '.github/workflows/dependency-review.yml')
-  if (manifest.qualityGate?.ci && manifest.supplyChain?.securityProfile === 'hardened') required.push('.github/workflows/codeql.yml')
-  if (manifest.supplyChain?.releaseAttestations) required.push('.github/workflows/release-attest.yml')
   for (const relative of new Set(required)) {
     if (!existsSync(resolve(root, relative))) note(`${relative} is missing`)
     else if (!setup && existsSync(resolve(root, '.git')) && !tracked(relative)) note(`${relative} is not tracked by git`)

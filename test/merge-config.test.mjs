@@ -22,8 +22,9 @@ test('configuration merge preserves project settings and updates one managed own
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-merge-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   write(root, '.agent-standard/manifest.json', JSON.stringify({
+    platform: { repository: 'github' },
     agents: ['claude', 'codex'],
-    governance: { codeowners: '@acme/platform @acme/security' },
+    governance: { owners: '@acme/platform @acme/security' },
     workflow: { profile: 'lightweight' }
   }))
   write(root, '.claude/settings.json', `\uFEFF${JSON.stringify({
@@ -69,8 +70,9 @@ test('non-Claude configurations do not create Claude settings', t => {
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-merge-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   write(root, '.agent-standard/manifest.json', JSON.stringify({
+    platform: { repository: 'github' },
     agents: ['codex'],
-    governance: { codeowners: '@acme/platform' },
+    governance: { owners: '@acme/platform' },
     workflow: { profile: 'lightweight' }
   }))
 
@@ -85,8 +87,9 @@ test('malformed managed markers fail closed instead of consuming project content
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-merge-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   write(root, '.agent-standard/manifest.json', JSON.stringify({
+    platform: { repository: 'github' },
     agents: ['codex'],
-    governance: { codeowners: '@acme/platform' },
+    governance: { owners: '@acme/platform' },
     workflow: { profile: 'lightweight' }
   }))
   const original = '# agent-standard:start\n/project/ @product/team\n'
@@ -96,4 +99,28 @@ test('malformed managed markers fail closed instead of consuming project content
   assert.equal(result.status, 1)
   assert.match(result.stderr, /malformed or duplicate agent-standard markers/)
   assert.equal(readFileSync(join(root, '.github/CODEOWNERS'), 'utf8'), original)
+})
+
+test('Azure DevOps merge preserves project PR content without creating GitHub hosting files', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-merge-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  write(root, '.agent-standard/manifest.json', JSON.stringify({
+    platform: { repository: 'azure-devops' },
+    agents: ['codex'],
+    governance: { owners: '@acme/platform @acme/security' },
+    workflow: { profile: 'spec-driven' }
+  }))
+  write(root, '.azuredevops/pull_request_template.md', '# Project review\n\nPreserve this guidance.\n')
+
+  const first = run(root)
+  assert.equal(first.status, 0, first.stderr)
+  const second = run(root)
+  assert.equal(second.status, 0, second.stderr)
+
+  const pullRequest = readFileSync(join(root, '.azuredevops/pull_request_template.md'), 'utf8')
+  assert.match(pullRequest, /Preserve this guidance/)
+  assert.match(pullRequest, /The OpenSpec change is linked and validates/)
+  assert.equal((pullRequest.match(/<!-- agent-standard:start -->/g) || []).length, 1)
+  assert.equal(existsSync(join(root, '.github/CODEOWNERS')), false)
+  assert.equal(existsSync(join(root, '.github/pull_request_template.md')), false)
 })

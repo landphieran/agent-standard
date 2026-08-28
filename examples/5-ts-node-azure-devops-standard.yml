@@ -1,0 +1,10 @@
+# Example 5 — minimum paved path for Azure Repos and Azure Pipelines.
+# The repository platform is normally detected by `agent-standard init`; the
+# answer is explicit here so the render matrix can exercise that path.
+setup_profile: standard
+project_name: inventory-service
+language_stack: ts-node
+mode: greenfield
+repository_platform: azure-devops
+owners: "@example/inventory"
+architecture: service-based

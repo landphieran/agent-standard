@@ -62,6 +62,9 @@ function changedFiles () {
   if (isCI) {
     const { base, head } = range()
     if (!base) return null
+    if (!gitOk(['rev-parse', '--verify', `${head}^`]) && git(['rev-parse', base]) === git(['rev-parse', head])) {
+      return [...new Set(normalise(git(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', head])))]
+    }
     return [...new Set(normalise(git(['diff', '--name-only', base, head])))]
   }
   if (!gitOk(['rev-parse', 'HEAD'])) return null

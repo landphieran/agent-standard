@@ -1,6 +1,6 @@
 # GitHub enforcement and hardening
 
-The generator commits enforceable jobs but intentionally does not mutate repository or organization settings. Those are privileged external state and require explicit administrator authorization.
+This page applies to the GitHub provider. For Azure Repos and Azure Pipelines, use [the Azure DevOps adapter guide](azure-devops.md). The generator commits enforceable jobs but intentionally does not mutate repository or organization settings. Those are privileged external state and require explicit administrator authorization.
 
 ## Required baseline
 

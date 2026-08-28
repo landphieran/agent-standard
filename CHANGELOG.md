@@ -4,6 +4,8 @@ This project has not published its first release. Until then, changes accumulate
 
 ## Unreleased
 
+- Added an Azure DevOps adapter with origin detection, provider-isolated review metadata, standalone and immutable central-template Azure Pipeline modes, Advanced Security expectations, SBOM publication, and a read-only remote-policy auditor.
+- Renamed the pre-release ownership contract from GitHub-specific `codeowners` to portable `owners`; the GitHub adapter still derives CODEOWNERS from it.
 - Added a transactional `agent-standard init` path with project/stack detection, explicit ownership, verified staging, dry-run plans, namespaced Copier state, collision preservation, rollback, and fail-closed package-manager checks.
 - Added standard and advanced setup profiles plus lightweight and spec-driven workflow profiles.
 - Moved enforcement into client-neutral scripts and added one complete manifest verification command.

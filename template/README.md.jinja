@@ -9,6 +9,9 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 | Architecture | `{{ architecture }}` |
 | Deployment topology | `{{ topology }}` |
 | Mode | `{{ mode }}` |
+| Repository platform | `{{ repository_platform }}` |
+{% if repository_platform == 'azure-devops' and ci %}| Azure Pipeline mode | `{{ azure_pipeline_mode }}` |
+{% endif -%}
 | Change workflow | `{{ workflow_profile }}` |
 | Definition-of-done gate | `{{ gate }}` |
 | Agent rulebooks | {{ agents | join(', ') }} |
@@ -29,7 +32,7 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 - **Definition-of-done gate** — work is not "done" until the plan is satisfied and tests
   exist in the right place, of the right type, and pass.
 - **Repository contract** — `.agent-standard/manifest.json` declares commands, docs, skills,
-  ownership, conformance state, security profile, waivers, and the required CycloneDX/SPDX bill of materials.
+  ownership, repository platform, conformance state, security profile, waivers, and the required CycloneDX/SPDX bill of materials.
 {% if mode == 'greenfield' %}- **Project skeleton** — a {{ architecture }} layout for {{ language_stack }}.{% endif %}
 
 ## Working here
@@ -49,7 +52,7 @@ node .agent-standard/scripts/verify.mjs
 {% endif -%}
 
 The gate runs fast tests locally (a Claude Code stop hook) and the complete contract{{ " " }}
-{%- if ci %}as a CI job intended to be required by the repository ruleset{% else %}— CI enforcement is disabled for this repo{% endif %}.
+{%- if ci %}as a CI job intended to be required by {% if repository_platform == 'github' %}a GitHub ruleset{% else %}an Azure Repos Build Validation policy{% endif %}{% else %}— CI enforcement is disabled for this repo{% endif %}.
 The manifest keeps local results separate from remotely audited enforcement, so a green local run does not overclaim conformance.
 
 ## Updating the standard

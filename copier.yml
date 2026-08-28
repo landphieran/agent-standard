@@ -45,19 +45,28 @@ mode:
     "Adopt — preserve existing project files and integrate the standard": adopt
   default: greenfield
 
-codeowners:
+repository_platform:
   type: str
-  help: GitHub user or team that owns standard and security paths (for example @acme/platform)
+  help: Repository hosting and CI platform; the recommended installer detects this from origin
+  choices:
+    "GitHub — GitHub Actions and repository rulesets": github
+    "Azure DevOps — Azure Repos and Azure Pipelines": azure-devops
+  default: github
+  when: "{{ setup_profile == 'advanced' }}"
+
+owners:
+  type: str
+  help: Portable owner aliases for standard and security paths (for example @acme/platform)
   validator: >-
     {% set state = namespace(invalid=false) %}
-    {% for character in codeowners %}
+    {% for character in owners %}
     {% if character not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@/_.- ' %}{% set state.invalid = true %}{% endif %}
     {% endfor %}
-    {% for owner in codeowners.split() %}
+    {% for owner in owners.split() %}
     {% if not owner.startswith('@') or owner.count('@') != 1 %}{% set state.invalid = true %}{% endif %}
     {% endfor %}
-    {% if not codeowners | trim or state.invalid %}
-    Enter one or more GitHub owners separated by spaces, for example @acme/platform @acme/security.
+    {% if not owners | trim or state.invalid %}
+    Enter one or more owner aliases separated by spaces, for example @acme/platform @acme/security.
     {% endif %}
 
 architecture:
@@ -118,6 +127,59 @@ ci:
   default: true
   when: "{{ setup_profile == 'advanced' }}"
 
+azure_pipeline_mode:
+  type: str
+  help: Standalone emits a complete pipeline; extends delegates enforcement to an immutable central template
+  choices:
+    "Standalone — complete repository pipeline": standalone
+    "Extends — centrally governed enterprise template": extends
+  default: standalone
+  when: "{{ setup_profile == 'advanced' and repository_platform == 'azure-devops' and ci }}"
+
+azure_default_branch:
+  type: str
+  help: Azure Repos branch protected by build validation and review policies
+  default: main
+  when: "{{ setup_profile == 'advanced' and repository_platform == 'azure-devops' }}"
+  validator: >-
+    {% if not azure_default_branch or azure_default_branch.startswith('/') or azure_default_branch.startswith('-') or azure_default_branch.endswith('/') or ' ' in azure_default_branch or '..' in azure_default_branch or '~' in azure_default_branch or '^' in azure_default_branch or ':' in azure_default_branch or '\\' in azure_default_branch %}
+    Enter a safe branch name such as main or release/stable.
+    {% endif %}
+
+azure_template_repository:
+  type: str
+  help: Azure Repos central template repository in Project/Repository form
+  default: PlatformEngineering/secure-pipelines
+  when: "{{ setup_profile == 'advanced' and repository_platform == 'azure-devops' and ci and azure_pipeline_mode == 'extends' }}"
+  validator: >-
+    {% if azure_pipeline_mode == 'extends' and (not azure_template_repository or '/' not in azure_template_repository or azure_template_repository.startswith('/') or azure_template_repository.endswith('/') or ':' in azure_template_repository or '\\' in azure_template_repository) %}
+    Enter the central Azure Repos template repository as Project/Repository.
+    {% endif %}
+
+azure_template_ref:
+  type: str
+  help: Immutable 40-character Git commit for the central pipeline template
+  default: "0000000000000000000000000000000000000000"
+  when: "{{ setup_profile == 'advanced' and repository_platform == 'azure-devops' and ci and azure_pipeline_mode == 'extends' }}"
+  validator: >-
+    {% set state = namespace(invalid=false) %}
+    {% for character in azure_template_ref %}
+    {% if character not in '0123456789abcdef' %}{% set state.invalid = true %}{% endif %}
+    {% endfor %}
+    {% if azure_pipeline_mode == 'extends' and (azure_template_ref | length != 40 or azure_template_ref == '0000000000000000000000000000000000000000' or state.invalid) %}
+    Pin the central template to its immutable 40-character Git commit SHA.
+    {% endif %}
+
+azure_template_path:
+  type: str
+  help: Path to the extending template inside the central repository
+  default: templates/agent-standard.yml
+  when: "{{ setup_profile == 'advanced' and repository_platform == 'azure-devops' and ci and azure_pipeline_mode == 'extends' }}"
+  validator: >-
+    {% if azure_pipeline_mode == 'extends' and (not azure_template_path or azure_template_path.startswith('/') or '..' in azure_template_path or '\\' in azure_template_path or (not azure_template_path.endswith('.yml') and not azure_template_path.endswith('.yaml'))) %}
+    Enter a safe repository-relative YAML template path.
+    {% endif %}
+
 bom_format:
   type: str
   help: Committed software bill of materials format
@@ -141,8 +203,8 @@ security_profile:
   type: str
   help: Repository security automation profile
   choices:
-    "Baseline - dependency updates and dependency review": baseline
-    "Hardened - baseline plus CodeQL": hardened
+    "Baseline - dependency review and vulnerability scanning": baseline
+    "Hardened - baseline plus code and secret protections": hardened
   default: hardened
   when: "{{ setup_profile == 'advanced' }}"
   validator: "{% if security_profile == 'hardened' and not ci %}The hardened profile requires CI so CodeQL can run.{% endif %}"
@@ -152,7 +214,9 @@ release_attestations:
   help: Emit an opt-in release workflow for signed build and SBOM attestations?
   default: false
   when: "{{ setup_profile == 'advanced' }}"
-  validator: "{% if release_attestations and not ci %}Release attestations require CI.{% endif %}"
+  validator: >-
+    {% if release_attestations and not ci %}Release attestations require CI.{% endif %}
+    {% if release_attestations and repository_platform == 'azure-devops' %}Azure DevOps release provenance requires an organization-specific artifact subject and is not part of the minimum adapter yet.{% endif %}
 
 # ── derived / non-asked ──────────────────────────────────────────────────────
 
@@ -163,12 +227,15 @@ pkg:
   default: "{{ project_name | lower | replace('-', '_') | replace(' ', '_') }}"
 
 _message_after_copy: |
-  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} / {{ architecture }} / {{ topology }} / {{ workflow_profile }}).
+  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} / {{ architecture }} / {{ topology }} / {{ workflow_profile }} / {{ repository_platform }}).
 
   Next:
   {% if mode == 'greenfield' %}  - install dependencies to create the lockfile
     - refresh the SBOM and run the verification command in README.md{% else %}  - map commands and globs to the adopted repository, then refresh the SBOM{% endif %}
     - review and commit every generated file, including agent instructions and skills
+  {% if repository_platform == 'azure-devops' %}  - create the Azure Pipeline from azure-pipelines.yml, require it through Build Validation, then run the read-only Azure DevOps audit
+  {% else %}  - require the generated checks through a GitHub ruleset and review the security settings
+  {% endif %}
     - pull future standard updates with:  copier update --trust --answers-file .agent-standard/copier-answers.yml
 
 # Files that must never be rendered by Copier because another tool owns them.
@@ -185,7 +252,7 @@ _exclude:
   - "{% if 'claude' not in agents %}.claude/settings.json{% else %}.agent-standard/no-exclude/claude-settings.json{% endif %}"
 
 # Existing project-owned files are never overwritten during initial adoption.
-# merge-config.mjs adds only the managed hook and CODEOWNERS block.
+# merge-config.mjs adds only the managed hook and provider-specific review metadata.
 _skip_if_exists:
   - "{% if mode == 'adopt' %}README.md{% else %}.agent-standard/no-skip/README.md{% endif %}"
   - "{% if mode == 'adopt' %}SECURITY.md{% else %}.agent-standard/no-skip/SECURITY.md{% endif %}"
@@ -195,6 +262,8 @@ _skip_if_exists:
   - "{% if mode == 'adopt' %}.github/CODEOWNERS{% else %}.agent-standard/no-skip/CODEOWNERS{% endif %}"
   - "{% if mode == 'adopt' %}.github/dependabot.yml{% else %}.agent-standard/no-skip/dependabot.yml{% endif %}"
   - "{% if mode == 'adopt' %}.github/pull_request_template.md{% else %}.agent-standard/no-skip/pull-request-template.md{% endif %}"
+  - "{% if mode == 'adopt' %}.azuredevops/pull_request_template.md{% else %}.agent-standard/no-skip/azure-pull-request-template.md{% endif %}"
+  - "{% if mode == 'adopt' %}azure-pipelines.yml{% else %}.agent-standard/no-skip/azure-pipelines.yml{% endif %}"
   - "{% if mode == 'adopt' %}docs/README.md{% else %}.agent-standard/no-skip/docs-README.md{% endif %}"
   - "{% if mode == 'adopt' %}docs/decisions/README.md{% else %}.agent-standard/no-skip/decisions-README.md{% endif %}"
   - "{% if mode == 'adopt' %}docs/decisions/0000-template.md{% else %}.agent-standard/no-skip/decision-template.md{% endif %}"

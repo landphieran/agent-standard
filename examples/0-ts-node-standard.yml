@@ -8,5 +8,5 @@ setup_profile: standard
 project_name: catalog-service
 language_stack: ts-node
 mode: greenfield
-codeowners: "@example/catalog"
+owners: "@example/catalog"
 architecture: service-based

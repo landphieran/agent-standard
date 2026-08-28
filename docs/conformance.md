@@ -1,6 +1,6 @@
 # Conformance model
 
-Conformance has two dimensions: a target level and a current state. This prevents a locally generated repository from claiming that remote GitHub policy is enforced when nobody has verified the repository settings.
+Conformance has two dimensions: a target level and a current state. This prevents a locally generated repository from claiming that remote GitHub or Azure DevOps policy is enforced when nobody has verified the repository settings.
 
 ## Levels
 
@@ -18,7 +18,7 @@ The template targets AS-3. Generating an attestation workflow is necessary but n
 | State | Meaning |
 |---|---|
 | `adopting` | Local integration or advisory controls are still being mapped and remediated |
-| `pending-remote` | Local strict controls pass, but required GitHub rules/settings are unverified |
+| `pending-remote` | Local strict controls pass, but required provider rules/settings are unverified |
 | `conformant` | Local controls and authorized remote enforcement have both been audited |
 | `drifted` | Previously accepted evidence no longer matches repository or remote state |
 
@@ -34,8 +34,8 @@ The doctor reports target, state, local enforcement, and remote enforcement sepa
 | AS-QUAL-001 | Source changes include tests or a structured waiver | DoD policy |
 | AS-QUAL-002 | Stack-native lint, type, test, and build checks pass | Full verification command |
 | AS-SUPPLY-001 | Selected CycloneDX/SPDX BOM is valid and current with locked dependency identities | SBOM checker |
-| AS-SUPPLY-002 | Workflow actions are immutable and dependency changes are reviewed | Source checks and GitHub workflows |
-| AS-REMOTE-001 | Pull requests, required jobs, code-owner review, and security features are enforced | Future authorized remote audit |
+| AS-SUPPLY-002 | External workflow references are immutable and dependency changes are reviewed | Source checks plus provider workflows/pipelines |
+| AS-REMOTE-001 | Pull requests, required jobs, owner review, and security features are enforced | Authorized provider audit; Azure emits `AS-ADO-*` results |
 | AS-PROV-001 | A released subject carries verifiable build/SBOM provenance | Optional release profile plus consumer verification |
 
 The next evidence revision should make control results first-class machine-readable records and map them to organization policy frameworks without expanding the minimum repository footprint.

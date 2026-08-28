@@ -1,0 +1,26 @@
+# Example 6 — Azure DevOps enterprise mode using a centrally governed template.
+# The ref is an immutable fixture SHA; consumers replace all three template
+# coordinates with their approved organization-owned template contract.
+setup_profile: advanced
+project_name: fulfillment-service
+language_stack: ts-node
+mode: greenfield
+repository_platform: azure-devops
+owners: "@example/fulfillment @example/security"
+architecture: clean-layered
+topology: modular-monolith
+workflow_profile: lightweight
+gate: strict
+agents:
+  - codex
+  - copilot
+ci: true
+azure_pipeline_mode: extends
+azure_default_branch: main
+azure_template_repository: PlatformEngineering/secure-pipelines
+azure_template_ref: 0123456789abcdef0123456789abcdef01234567
+azure_template_path: templates/agent-standard.yml
+bom_format: both
+bom_gate: strict
+security_profile: hardened
+release_attestations: false

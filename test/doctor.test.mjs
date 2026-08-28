@@ -30,7 +30,8 @@ function manifest (workflow = 'lightweight') {
       name: 'fixture', packageName: 'fixture', stack: 'ts-node', packageManager: 'npm',
       architecture: 'service-based', topology: 'single-deployable', mode: 'greenfield'
     },
-    governance: { codeowners: '@example/platform' },
+    platform: { repository: 'github', ci: 'github-actions', pipelineMode: 'standalone' },
+    governance: { owners: '@example/platform' },
     agents: ['codex'],
     workflow: { profile: workflow, engine: workflow === 'spec-driven' ? 'openspec' : 'native' },
     commands: { install: 'npm install', verify: 'node verify.mjs', updateBom: 'node sbom.mjs' },
@@ -107,6 +108,68 @@ function runDoctor (root, ...args) {
   })
 }
 
+function azureFixture () {
+  const root = fixture()
+  const azureManifest = manifest()
+  azureManifest.platform = { repository: 'azure-devops', ci: 'azure-pipelines', pipelineMode: 'standalone' }
+  write(root, '.agent-standard/manifest.json', JSON.stringify(azureManifest))
+  write(root, '.agent-standard/platforms/azure-devops.schema.json', '{}')
+  write(root, '.agent-standard/platforms/azure-devops.json', JSON.stringify({
+    $schema: './azure-devops.schema.json',
+    schemaVersion: 1,
+    service: 'azure-devops-services',
+    defaultBranch: 'main',
+    pipeline: { mode: 'standalone', path: 'azure-pipelines.yml', definitionId: null, template: null },
+    ownership: { aliases: ['@example/platform'], requiredReviewerIds: [] },
+    branchPolicies: {
+      minimumReviewers: 1,
+      creatorVoteCounts: false,
+      allowDownvotes: false,
+      resetVotesOnPush: true,
+      requireDesignatedReviewers: true,
+      requireLinkedWorkItems: true,
+      requireCommentResolution: true,
+      buildValidation: { required: true, manualQueueOnly: false, queueOnSourceUpdateOnly: false, validDurationMinutes: 0 },
+      securityStatusCheck: {
+        required: true,
+        genre: 'AdvancedSecurity',
+        name: 'NewHighAndCritical',
+        invalidateOnSourceUpdate: true,
+        applicability: 'default'
+      }
+    },
+    advancedSecurity: {
+      codeSecurity: true,
+      dependencyScanning: true,
+      codeql: false,
+      secretProtection: false,
+      secretPushProtection: false
+    }
+  }))
+  write(root, '.agent-standard/scripts/audit-azure-devops.mjs', '')
+  write(root, '.azuredevops/pull_request_template.md', '<!-- agent-standard:start -->\n## Agent-standard checks\n<!-- agent-standard:end -->\n')
+  write(root, 'azure-pipelines.yml', [
+    'trigger: none',
+    'pr: none',
+    'steps:',
+    '  - checkout: self',
+    '    fetchDepth: 0',
+    '  - script: node .agent-standard/scripts/verify.mjs',
+    '  - script: node .agent-standard/scripts/dod.mjs --ci --policy-only',
+    '    env:',
+    '      DOD_BASE: HEAD^1',
+    '  - task: UseNode@1',
+    '    inputs:',
+    '      version: 22.x',
+    '  - task: AdvancedSecurity-Dependency-Scanning@1',
+    '  - task: PublishPipelineArtifact@1',
+    '    inputs:',
+    '      targetPath: bom.cdx.json',
+    ''
+  ].join('\n'))
+  return root
+}
+
 test('setup validation permits generated files before the first commit', t => {
   const root = fixture()
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -156,4 +219,17 @@ test('spec-driven validation requires an OpenSpec artifact for each selected cli
     remoteEnforcement: 'unverified',
     findings: []
   })
+})
+
+test('Azure DevOps setup validates the adapter and standalone pipeline contract', t => {
+  const root = azureFixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+
+  const complete = runDoctor(root, '--setup')
+  assert.equal(complete.status, 0, `${complete.stderr}\n${complete.stdout}`)
+
+  write(root, 'azure-pipelines.yml', 'steps:\n  - script: node .agent-standard/scripts/verify.mjs\n')
+  const incomplete = runDoctor(root, '--setup')
+  assert.equal(incomplete.status, 1)
+  assert.match(incomplete.stdout, /must disable unsupported Azure Repos YAML PR triggers/)
 })

@@ -16,8 +16,11 @@ flowchart TD
   L --> M
   M --> A[Atomic apply to destination]
   A --> V[One local verification command]
-  V --> G[GitHub checks]
-  G --> E[Authorized ruleset enforcement]
+  V --> H{Repository provider}
+  H -->|GitHub| G[GitHub Actions checks]
+  H -->|Azure DevOps| Z[Azure Pipeline gate]
+  G --> E[Authorized remote enforcement]
+  Z --> E
 ```
 
 Running Ruler without skill ownership, synchronizing the standard skills, and initializing OpenSpec last prevents one generator from erasing another generator’s client artifacts.
@@ -34,8 +37,11 @@ Running Ruler without skill ownership, synchronizing the standard skills, and in
 | `.claude/skills/**`, `.agents/skills/**`, `.github/skills/**` | standard skill sync | Generated, tracked client discovery surfaces |
 | `openspec/**` and OpenSpec client artifacts | OpenSpec | Present only in the spec-driven profile |
 | `.agent-standard/**` | agent-standard | Manifest, schema, configuration merge, gates, waivers, verification, and SBOM tooling |
-| managed CODEOWNERS block and Claude hook | merge script | Idempotent additions that preserve surrounding project configuration |
-| GitHub rulesets/settings | authorized repository administrators | External state; never mutated by the template |
+| managed provider review block and Claude hook | merge script | Idempotent additions that preserve surrounding project configuration |
+| `.github/CODEOWNERS`, Dependabot, PR template, workflows | GitHub adapter | Emitted only for GitHub repositories |
+| `.agent-standard/platforms/azure-devops.json`, `.azuredevops/`, `azure-pipelines.yml` | Azure DevOps adapter | Emitted only for Azure DevOps repositories; standalone or immutable central-template entry point |
+| `modules/azure-devops/**` | agent-standard/platform team | Reference enterprise extending template; vendored into a protected organization repository, never rendered into applications |
+| GitHub rulesets or Azure Repos policies/security settings | authorized repository administrators | External state; never mutated by the template |
 
 ## Architecture axes
 
@@ -43,14 +49,14 @@ Running Ruler without skill ownership, synchronizing the standard skills, and in
 
 ## Enforcement flow
 
-The Claude Stop hook is fast local feedback and is bypassable by design. CI is the enforceable repository boundary only after its job is required by a ruleset.
+The Claude Stop hook is fast local feedback and is bypassable by design. CI is the enforceable repository boundary only after its job is required by a GitHub ruleset or Azure Repos Build Validation policy.
 
 1. `doctor.mjs` checks required tracked files, skill frontmatter and propagation, workflow artifacts, governed-document metadata and links, the declared toolchain, and SBOM identities.
 2. `verify.mjs` runs the doctor and the complete stack-native lint/type/test/build command once.
 3. `dod.mjs` checks the changed-file policy: source changes need a recognized test or an owned, expiring waiver; active OpenSpec work must validate.
 4. CI runs full verification followed by policy-only DoD evaluation, avoiding duplicate test execution.
-5. Dependency review, CodeQL, and build SBOM jobs add supply-chain evidence.
-6. A separately administered ruleset turns passing jobs into mandatory merge controls.
+5. Provider-native dependency/code scanning and published SBOM artifacts add supply-chain evidence.
+6. Separately administered repository policy turns passing jobs into mandatory merge controls; the Azure adapter can audit that state without mutating it.
 
 ## Update behavior
 

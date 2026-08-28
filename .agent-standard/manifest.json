@@ -18,7 +18,12 @@
     "topology": "single-deployable",
     "mode": "adopt"
   },
-  "governance": { "codeowners": "@landphieran" },
+  "platform": {
+    "repository": "github",
+    "ci": "github-actions",
+    "pipelineMode": "standalone"
+  },
+  "governance": { "owners": "@landphieran" },
   "agents": ["codex", "claude", "copilot"],
   "workflow": { "profile": "lightweight", "engine": "native" },
   "commands": {

@@ -1,0 +1,236 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const normalise = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const enabledAndBlocking = policy => policy?.isEnabled === true && policy?.isBlocking === true
+const appliesToAllPaths = policy => {
+  const patterns = policy?.settings?.filenamePatterns
+  return patterns === undefined || patterns === null || (Array.isArray(patterns) && patterns.length === 0)
+}
+
+const policyType = {
+  minimumReviewers: 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd',
+  requiredReviewers: 'fd2167ab-b0be-447a-8ec8-39368250530e',
+  buildValidation: '0609b952-1397-4640-95ec-e00a01b2c241',
+  workItemLinking: '40e92b44-2fe1-4dd6-b3d8-74a9c21d0c6e',
+  commentResolution: 'c6a1889d-b943-4856-b76f-9e46bb6b0df2',
+  statusCheck: 'cbdc66da-9728-4af8-aada-9a5a32e4a226'
+}
+
+function policiesByName (policies, candidates, typeIds = []) {
+  return policies.filter(policy => {
+    const name = normalise(policy?.type?.displayName || policy?.type?.name)
+    return typeIds.includes(String(policy?.type?.id || '').toLowerCase()) || candidates.some(candidate => name.includes(candidate))
+  })
+}
+
+const policyByName = (policies, candidates, typeIds) => policiesByName(policies, candidates, typeIds)[0]
+
+export function evaluateAzureDevOps (config, policies, security = null) {
+  const controls = []
+  const record = (id, passed, detail) => controls.push({ id, status: passed ? 'pass' : 'fail', detail })
+  const branch = config.branchPolicies || {}
+
+  const reviewers = policyByName(policies, ['minimum number of reviewers', 'minimum reviewers', 'minimum approval count'], [policyType.minimumReviewers])
+  record('AS-ADO-PR-001', enabledAndBlocking(reviewers) && Number(reviewers.settings?.minimumApproverCount) >= Number(branch.minimumReviewers),
+    `minimum ${branch.minimumReviewers} reviewer(s), enabled and blocking`)
+  record('AS-ADO-PR-002', enabledAndBlocking(reviewers) && reviewers.settings?.creatorVoteCounts === branch.creatorVoteCounts,
+    'pull-request creator approval does not satisfy the reviewer policy')
+  record('AS-ADO-PR-003', enabledAndBlocking(reviewers) && reviewers.settings?.allowDownvotes === branch.allowDownvotes,
+    'pull requests cannot complete while a reviewer vote rejects or waits')
+  record('AS-ADO-PR-004', enabledAndBlocking(reviewers) && reviewers.settings?.resetOnSourcePush === branch.resetVotesOnPush,
+    'review votes reset when the source branch changes')
+
+  if (branch.requireDesignatedReviewers) {
+    const expectedReviewerIds = config.ownership?.requiredReviewerIds || []
+    record('AS-ADO-OWNER-000', Array.isArray(expectedReviewerIds) && expectedReviewerIds.length > 0,
+      'the adapter is bound to at least one resolved Azure DevOps reviewer identity')
+    const required = policiesByName(policies, ['required reviewers', 'required reviewer'], [policyType.requiredReviewers])
+      .find(policy => enabledAndBlocking(policy) && appliesToAllPaths(policy) &&
+        Array.isArray(policy.settings?.requiredReviewerIds) && expectedReviewerIds.length > 0 &&
+        expectedReviewerIds.every(id => policy.settings.requiredReviewerIds.some(actual => normalise(actual) === normalise(id))))
+    record('AS-ADO-OWNER-001', enabledAndBlocking(required) && appliesToAllPaths(required),
+      'every configured owner/security identity is required to review pull requests across the repository')
+  }
+
+  if (branch.requireLinkedWorkItems) {
+    const linked = policyByName(policies, ['work item linking', 'linked work items'], [policyType.workItemLinking])
+    record('AS-ADO-TRACE-001', enabledAndBlocking(linked), 'linked work items are required')
+  }
+  if (branch.requireCommentResolution) {
+    const comments = policyByName(policies, ['comment requirements', 'comment resolution'], [policyType.commentResolution])
+    record('AS-ADO-PR-005', enabledAndBlocking(comments), 'pull-request comments must be resolved')
+  }
+  if (branch.buildValidation?.required) {
+    const expectedDefinition = config.pipeline?.definitionId
+    const build = policiesByName(policies, ['build validation', 'build'], [policyType.buildValidation])
+      .find(policy => policy.settings?.buildDefinitionId === expectedDefinition)
+    record('AS-ADO-CI-000', Number.isInteger(expectedDefinition) && expectedDefinition > 0,
+      'the adapter is bound to the created Azure Pipeline definition ID')
+    record('AS-ADO-CI-001', Number.isInteger(expectedDefinition) && enabledAndBlocking(build) && appliesToAllPaths(build) && build.settings?.buildDefinitionId === expectedDefinition &&
+      build.settings?.manualQueueOnly === branch.buildValidation.manualQueueOnly &&
+      build.settings?.queueOnSourceUpdateOnly === branch.buildValidation.queueOnSourceUpdateOnly &&
+      Number(build.settings?.validDuration) === Number(branch.buildValidation.validDurationMinutes),
+    'agent-standard build validation is enabled, blocking, automatic, and invalidated immediately by protected-branch changes')
+  }
+
+  if (branch.securityStatusCheck?.required) {
+    const expected = branch.securityStatusCheck
+    const statusCheck = policiesByName(policies, ['status check', 'status'], [policyType.statusCheck])
+      .find(policy => normalise(policy.settings?.statusGenre) === normalise(expected.genre) &&
+        normalise(policy.settings?.statusName) === normalise(expected.name))
+    const defaultApplicability = statusCheck?.settings?.policyApplicability === undefined ||
+      statusCheck?.settings?.policyApplicability === null || Number(statusCheck?.settings?.policyApplicability) === 0
+    const defaultAuthor = !statusCheck?.settings?.authorId
+    record('AS-ADO-SEC-004', enabledAndBlocking(statusCheck) && appliesToAllPaths(statusCheck) &&
+      statusCheck.settings?.invalidateOnSourceUpdate === expected.invalidateOnSourceUpdate &&
+      expected.applicability === 'default' && defaultApplicability && defaultAuthor,
+    `${expected.genre}/${expected.name} is required, reset on source updates, applies by default, and trusts the native publisher`)
+  }
+
+  if (config.advancedSecurity?.codeSecurity) {
+    record('AS-ADO-SEC-001', security?.codeSecurityFeatures?.codeSecurityEnabled === true, 'Code Security is enabled')
+  }
+  if (config.advancedSecurity?.secretProtection) {
+    record('AS-ADO-SEC-002', security?.secretProtectionFeatures?.secretProtectionEnabled === true, 'Secret Protection is enabled')
+  }
+  if (config.advancedSecurity?.secretPushProtection) {
+    record('AS-ADO-SEC-003', security?.secretProtectionFeatures?.blockPushes === true, 'secret push protection blocks detected secrets')
+  }
+
+  return { ok: controls.every(control => control.status === 'pass'), controls }
+}
+
+function parseArgs (values) {
+  const args = [...values]
+  const take = name => {
+    const index = args.indexOf(name)
+    if (index < 0) return null
+    const value = args[index + 1]
+    if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+    args.splice(index, 2)
+    return value
+  }
+  const flag = name => {
+    const index = args.indexOf(name)
+    if (index < 0) return false
+    args.splice(index, 1)
+    return true
+  }
+  const parsed = {
+    organization: take('--organization') || process.env.SYSTEM_COLLECTIONURI,
+    project: take('--project') || process.env.SYSTEM_TEAMPROJECT,
+    repository: take('--repository') || process.env.BUILD_REPOSITORY_ID,
+    branch: take('--branch'),
+    policyFile: take('--policy-file'),
+    securityFile: take('--security-file'),
+    json: flag('--json')
+  }
+  if (args.length) throw new Error(`unexpected arguments: ${args.join(' ')}`)
+  return parsed
+}
+
+function readJson (path) {
+  return JSON.parse(readFileSync(resolve(path), 'utf8').replace(/^\uFEFF/, ''))
+}
+
+function readPolicies (options, branch) {
+  if (options.policyFile) return readJson(options.policyFile)
+  if (!options.organization || !options.project || !options.repository) {
+    throw new Error('provide --organization, --project, and --repository, or use --policy-file for an offline audit')
+  }
+  const az = process.platform === 'win32' ? 'az.cmd' : 'az'
+  const result = spawnSync(az, [
+    'repos', 'policy', 'list', '--organization', options.organization, '--project', options.project,
+    '--repository-id', options.repository, '--branch', branch, '--only-show-errors', '--output', 'json'
+  ], {
+    encoding: 'utf8',
+    timeout: 30000,
+    env: { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: 'no' }
+  })
+  if (result.status !== 0) {
+    throw new Error(`Azure policy query failed; install and authenticate the azure-devops CLI extension explicitly: ${(result.stderr || result.stdout || result.error?.message || '').trim()}`)
+  }
+  return JSON.parse(result.stdout)
+}
+
+export function advancedSecurityEndpoint (organization, project, repository) {
+  const url = new URL(organization)
+  const hostname = url.hostname.toLowerCase()
+  let base
+  if (hostname === 'dev.azure.com') {
+    const name = url.pathname.split('/').filter(Boolean)[0]
+    if (!name) throw new Error('Azure DevOps organization URL is missing its organization name')
+    base = `https://advsec.dev.azure.com/${encodeURIComponent(name)}`
+  } else if (hostname.endsWith('.visualstudio.com')) {
+    const name = hostname.slice(0, -'.visualstudio.com'.length)
+    if (!name || name.includes('.')) throw new Error('Azure DevOps visualstudio.com organization URL is invalid')
+    base = `https://${name}.advsec.visualstudio.com`
+  } else throw new Error('Azure DevOps organization must use a dev.azure.com or visualstudio.com URL')
+  return `${base}/${encodeURIComponent(project)}/_apis/management/repositories/${encodeURIComponent(repository)}/enablement?includeAllProperties=true&api-version=7.2-preview.3`
+}
+
+async function readSecurity (options, required) {
+  if (!required) return null
+  if (options.securityFile) return readJson(options.securityFile)
+  if (!options.organization || !options.project || !options.repository) {
+    throw new Error('Advanced Security audit requires Azure DevOps coordinates or --security-file')
+  }
+  const systemToken = process.env.SYSTEM_ACCESSTOKEN
+  const pat = process.env.AZURE_DEVOPS_EXT_PAT
+  if (!systemToken && !pat) {
+    throw new Error('Advanced Security audit requires SYSTEM_ACCESSTOKEN or AZURE_DEVOPS_EXT_PAT; tokens are read from the environment and never written')
+  }
+  const url = advancedSecurityEndpoint(options.organization, options.project, options.repository)
+  const authorization = systemToken
+    ? `Bearer ${systemToken}`
+    : `Basic ${Buffer.from(`:${pat}`).toString('base64')}`
+  const response = await fetch(url, { headers: { Authorization: authorization }, signal: AbortSignal.timeout(30000) })
+  if (!response.ok) throw new Error(`Advanced Security query failed with HTTP ${response.status}`)
+  return response.json()
+}
+
+async function main () {
+  const root = resolve(process.env.AGENT_STANDARD_ROOT || process.cwd())
+  const configPath = resolve(root, '.agent-standard/platforms/azure-devops.json')
+  if (!existsSync(configPath)) throw new Error('.agent-standard/platforms/azure-devops.json is missing')
+  const config = readJson(configPath)
+  const options = parseArgs(process.argv.slice(2))
+  const branch = options.branch || config.defaultBranch
+  const policyResponse = readPolicies(options, branch)
+  const policies = Array.isArray(policyResponse) ? policyResponse : policyResponse?.value
+  if (!Array.isArray(policies)) throw new Error('Azure policy response must contain a JSON array')
+  const security = await readSecurity(options, Object.values(config.advancedSecurity || {}).some(Boolean))
+  const evaluation = evaluateAzureDevOps(config, policies, security)
+  const result = {
+    schemaVersion: 1,
+    provider: 'azure-devops',
+    scope: {
+      organization: options.organization || null,
+      project: options.project || null,
+      repository: options.repository || null
+    },
+    targetBranch: branch,
+    evaluatedAt: new Date().toISOString(),
+    ...evaluation
+  }
+  if (options.json) console.log(JSON.stringify(result, null, 2))
+  else if (result.ok) console.log(`agent-standard Azure DevOps audit: remote controls pass for ${branch}`)
+  else console.error(`agent-standard Azure DevOps audit findings:\n- ${result.controls.filter(control => control.status === 'fail').map(control => `${control.id}: ${control.detail}`).join('\n- ')}`)
+  return result.ok ? 0 : 1
+}
+
+const invokedAsScript = (() => {
+  if (!process.argv[1]) return false
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch { return false }
+})()
+
+if (invokedAsScript) {
+  main().then(code => { process.exitCode = code }).catch(error => {
+    console.error(`agent-standard Azure DevOps audit failed: ${error.message}`)
+    process.exitCode = 1
+  })
+}

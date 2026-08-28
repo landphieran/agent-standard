@@ -2,7 +2,7 @@
 id: AGENT-STANDARD
 type: standard
 status: active
-owner: {{ codeowners | tojson }}
+owner: {{ owners | tojson }}
 scope: repository
 last_verified: 2026-08-28
 verified_against: agent-standard-0.6.0-dev
@@ -20,8 +20,8 @@ expiring entry in `.agent-standard/waivers.json` only when the ordinary test pol
 cannot apply.
 
 The standard targets AS-3. Its manifest reports local and remote enforcement
-separately; generated GitHub jobs become hard gates only after an administrator requires
-them in a repository ruleset.
+separately; generated CI becomes a hard gate only after an administrator requires it
+{% if repository_platform == 'github' %}in a GitHub ruleset{% else %}through an Azure Repos Build Validation policy{% endif %}.
 
 {% if workflow_profile == 'spec-driven' -%}
 Non-trivial changes use the OpenSpec workflow under `openspec/`.

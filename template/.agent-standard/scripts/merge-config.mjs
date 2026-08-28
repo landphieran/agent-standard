@@ -7,18 +7,24 @@ const readJson = path => JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/
 const manifest = readJson(resolve(root, '.agent-standard/manifest.json'))
 
 function validateInputs () {
+  if (!['github', 'azure-devops'].includes(manifest.platform?.repository)) {
+    throw new Error('manifest platform.repository must be github or azure-devops')
+  }
   if (!Array.isArray(manifest.agents) || !manifest.agents.length || manifest.agents.some(agent => !['claude', 'codex', 'copilot'].includes(agent))) {
     throw new Error('manifest agents must contain supported client names')
   }
-  if (!/^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/.test(manifest.governance?.codeowners || '')) {
-    throw new Error('manifest governance.codeowners must contain GitHub users or teams')
+  if (!/^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/.test(manifest.governance?.owners || '')) {
+    throw new Error('manifest governance.owners must contain valid owner aliases')
   }
   if (!['lightweight', 'spec-driven'].includes(manifest.workflow?.profile)) throw new Error('manifest workflow profile is invalid')
   if (manifest.agents.includes('claude') && existsSync(resolve(root, '.claude/settings.json'))) readJson(resolve(root, '.claude/settings.json'))
-  for (const [relative, start, end] of [
-    ['.github/CODEOWNERS', '# agent-standard:start', '# agent-standard:end'],
-    ['.github/pull_request_template.md', '<!-- agent-standard:start -->', '<!-- agent-standard:end -->']
-  ]) {
+  const managedFiles = manifest.platform.repository === 'github'
+    ? [
+        ['.github/CODEOWNERS', '# agent-standard:start', '# agent-standard:end'],
+        ['.github/pull_request_template.md', '<!-- agent-standard:start -->', '<!-- agent-standard:end -->']
+      ]
+    : [['.azuredevops/pull_request_template.md', '<!-- agent-standard:start -->', '<!-- agent-standard:end -->']]
+  for (const [relative, start, end] of managedFiles) {
     const path = resolve(root, relative)
     const text = existsSync(path) ? readFileSync(path, 'utf8') : ''
     const starts = text.split(start).length - 1
@@ -55,7 +61,8 @@ function mergeClaudeSettings () {
 }
 
 function mergeCodeowners () {
-  const owner = manifest.governance?.codeowners
+  if (manifest.platform.repository !== 'github') return
+  const owner = manifest.governance?.owners
   const relative = '.github/CODEOWNERS'
   const path = resolve(root, relative)
   const start = '# agent-standard:start'
@@ -91,7 +98,9 @@ function mergeCodeowners () {
 }
 
 function mergePullRequestTemplate () {
-  const relative = '.github/pull_request_template.md'
+  const relative = manifest.platform.repository === 'github'
+    ? '.github/pull_request_template.md'
+    : '.azuredevops/pull_request_template.md'
   const path = resolve(root, relative)
   const start = '<!-- agent-standard:start -->'
   const end = '<!-- agent-standard:end -->'

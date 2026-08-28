@@ -18,8 +18,13 @@
     "topology": "{{ topology }}",
     "mode": "{{ mode }}"
   },
+  "platform": {
+    "repository": "{{ repository_platform }}",
+    "ci": "{% if not ci %}none{% elif repository_platform == 'github' %}github-actions{% else %}azure-pipelines{% endif %}",
+    "pipelineMode": "{% if not ci %}none{% elif repository_platform == 'azure-devops' %}{{ azure_pipeline_mode }}{% else %}standalone{% endif %}"
+  },
   "governance": {
-    "codeowners": {{ codeowners | tojson }}
+    "owners": {{ owners | tojson }}
   },
   "agents": [{% for agent in agents %}"{{ agent }}"{% if not loop.last %}, {% endif %}{% endfor %}],
   "workflow": {

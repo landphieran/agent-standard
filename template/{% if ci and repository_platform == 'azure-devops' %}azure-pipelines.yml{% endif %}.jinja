@@ -1,0 +1,102 @@
+# Azure Repos pull-request validation is configured through a required Build
+# Validation branch policy. YAML `pr` triggers do not apply to Azure Repos.
+trigger:
+  branches:
+    include:
+      - {{ azure_default_branch | tojson }}
+
+pr: none
+
+{% if azure_pipeline_mode == 'extends' %}
+resources:
+  repositories:
+    - repository: agent_standard_templates
+      type: git
+      name: {{ azure_template_repository | tojson }}
+      ref: {{ azure_template_ref | tojson }}
+
+extends:
+  template: {{ (azure_template_path ~ '@agent_standard_templates') | tojson }}
+  parameters:
+    stack: {{ language_stack | tojson }}
+    securityProfile: {{ security_profile | tojson }}
+    sbomFormats:
+{% if bom_format in ['cyclonedx-json', 'both'] %}
+      - cyclonedx-json
+{% endif %}
+{% if bom_format in ['spdx-json', 'both'] %}
+      - spdx-json
+{% endif %}
+{% else %}
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 0
+
+  - task: UseNode@1
+    displayName: Use Node.js 22
+    inputs:
+      version: 22.x
+
+{% if security_profile == 'hardened' %}
+  - task: AdvancedSecurity-Codeql-Init@1
+    displayName: Initialize CodeQL
+    inputs:
+      languages: {% if language_stack == 'py-fastapi' %}python{% else %}javascript{% endif %}
+      enableAutomaticCodeQLInstall: true
+
+{% endif %}
+{% if language_stack in ['ts-node', 'ts-next'] %}
+  - script: npm ci
+    displayName: Install locked dependencies
+{% if language_stack == 'ts-next' %}
+
+  - script: npx playwright install --with-deps chromium
+    displayName: Install Playwright Chromium
+{% endif %}
+{% else %}
+  - script: python -m pip install uv==0.10.8
+    displayName: Install pinned uv
+
+  - script: uv sync --locked --all-groups
+    displayName: Install locked dependencies
+{% endif %}
+
+  - script: node .agent-standard/scripts/verify.mjs
+    displayName: Verify repository contract
+
+  - script: node .agent-standard/scripts/dod.mjs --ci --policy-only
+    displayName: Verify change policy
+    env:
+      DOD_BASE: HEAD^1
+      DOD_HEAD: HEAD
+
+  - task: AdvancedSecurity-Dependency-Scanning@1
+    displayName: Scan dependencies
+
+{% if security_profile == 'hardened' %}
+  - task: AdvancedSecurity-Codeql-Analyze@1
+    displayName: Analyze CodeQL database
+    inputs:
+      WaitForProcessing: true
+
+{% endif %}
+{% if bom_format in ['cyclonedx-json', 'both'] %}
+  - task: PublishPipelineArtifact@1
+    displayName: Publish CycloneDX SBOM
+    inputs:
+      targetPath: bom.cdx.json
+      artifact: {{ (pkg ~ '-cyclonedx-sbom') | tojson }}
+
+{% endif %}
+{% if bom_format in ['spdx-json', 'both'] %}
+  - task: PublishPipelineArtifact@1
+    displayName: Publish SPDX SBOM
+    inputs:
+      targetPath: bom.spdx.json
+      artifact: {{ (pkg ~ '-spdx-sbom') | tojson }}
+{% endif %}
+{% endif %}

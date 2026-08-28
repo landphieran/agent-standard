@@ -17,6 +17,7 @@ Options:
   --ref <git-ref>           Template ref (default: HEAD during pre-release)
   --name <project-name>     Project name; otherwise detected from the destination
   --stack <stack>           ts-node, ts-next, or py-fastapi; otherwise detected
+  --scm <provider>          github or azure-devops; otherwise detected from origin
   --architecture <style>    service-based or clean-layered (default: service-based)
   --workflow <profile>      lightweight or spec-driven (default: lightweight)
   --advanced                Expose the advanced Copier profile using safe defaults
@@ -86,6 +87,19 @@ function detectName (root) {
   const pyproject = join(root, 'pyproject.toml')
   if (existsSync(pyproject)) return readFileSync(pyproject, 'utf8').match(/^name\s*=\s*["']([^"']+)/m)?.[1] || basename(root)
   return basename(root)
+}
+
+export function detectRepositoryPlatform (root, requested) {
+  if (requested) {
+    if (!['github', 'azure-devops'].includes(requested)) throw new Error(`unsupported repository platform: ${requested}`)
+    return requested
+  }
+  try {
+    const remote = git(root, ['remote', 'get-url', 'origin']).toLowerCase()
+    if (remote.includes('dev.azure.com/') || remote.includes('visualstudio.com/')) return 'azure-devops'
+    if (remote.includes('github.com')) return 'github'
+  } catch { /* a greenfield destination might not have a Git remote yet */ }
+  return 'github'
 }
 
 export function assertSupportedToolchain (root, stack) {
@@ -165,6 +179,7 @@ function init () {
   const ref = option('--ref') || 'HEAD'
   const requestedName = option('--name')
   const requestedStack = option('--stack')
+  const requestedPlatform = option('--scm')
   const architecture = option('--architecture') || 'service-based'
   const requestedOwner = option('--owner')
   const workflow = option('--workflow') || 'lightweight'
@@ -190,7 +205,7 @@ function init () {
 
   const owner = requestedOwner
   if (!owner || !/^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/.test(owner)) {
-    throw new Error('provide --owner with one or more GitHub users/teams, for example --owner @acme/platform')
+    throw new Error('provide --owner with one or more portable owner aliases, for example --owner @acme/platform')
   }
 
   const tempRoot = mkdtempSync(join(tmpdir(), 'agent-standard-init-'))
@@ -204,6 +219,7 @@ function init () {
     } else mkdirSync(stage, { recursive: true })
 
     const stack = detectStack(stage, requestedStack)
+    const repositoryPlatform = detectRepositoryPlatform(stage, requestedPlatform)
     assertSupportedToolchain(stage, stack)
     const name = requestedName || detectName(stage)
     const data = {
@@ -211,7 +227,8 @@ function init () {
       project_name: name,
       language_stack: stack,
       mode: existing ? 'adopt' : 'greenfield',
-      codeowners: owner,
+      repository_platform: repositoryPlatform,
+      owners: owner,
       architecture,
       workflow_profile: workflow
     }
@@ -238,6 +255,9 @@ function init () {
     copyAtomically(stage, target, files, backup)
     console.log(`\nApplied agent-standard to ${target}.`)
     console.log('Next: install dependencies, refresh the SBOM, stage generated files, and run the manifest verification command.')
+    if (repositoryPlatform === 'azure-devops') {
+      console.log('Then create the Azure Pipeline, require it with Build Validation, and run the read-only Azure DevOps audit.')
+    } else console.log('Then require the generated checks with a GitHub ruleset and review the repository security settings.')
   } finally {
     if (worktree) {
       try { git(target, ['worktree', 'remove', '--force', stage], false) } catch { console.warn(`warning: remove temporary worktree manually: ${stage}`) }

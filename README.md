@@ -10,11 +10,11 @@ The default path is intentionally small: the installer detects an existing proje
 |---|---|
 | Agent execution | Tracked `AGENTS.md`/`CLAUDE.md` and portable skills generated from one `.ruler/` source |
 | Change workflow | Lightweight acceptance criteria and proportional change plans by default; OpenSpec as an opt-in spec-driven profile |
-| Project contract | `.agent-standard/manifest.json` plus schema, explicit ownership, workflow, package manager, and conformance state |
+| Project contract | `.agent-standard/manifest.json` plus schema, explicit ownership, workflow, package manager, repository platform, and conformance state |
 | Documentation | Governed indexes, freshness metadata, ADR and runbook conventions, and deterministic link/metadata checks |
 | Quality | One full verification command, a source-change/test policy, structured expiring waivers, and matching CI behavior |
 | Supply chain | Committed CycloneDX JSON, SPDX JSON, or both, with strict or advisory freshness gates |
-| Security | SHA-pinned Actions, least-privilege permissions, Dependabot, dependency review, hardened CodeQL, and optional release attestations |
+| Security | Provider-native protected CI, immutable external references, dependency controls, hardened code/secret scanning, and optional GitHub release attestations |
 
 ## Recommended setup
 
@@ -24,21 +24,21 @@ Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for i
 npx --yes --package=github:landphieran/agent-standard agent-standard init ./my-service --owner '@acme/platform'
 ```
 
-For an existing repository, commit or stash current work and run the same command at its root. The installer infers its name, stack, and adoption mode; security ownership remains an explicit choice:
+For an existing repository, commit or stash current work and run the same command at its root. The installer infers its name, stack, adoption mode, and GitHub/Azure DevOps provider; security ownership remains an explicit choice:
 
 ```bash
 npx --yes --package=github:landphieran/agent-standard agent-standard init . --owner '@acme/platform'
 ```
 
-Use `--dry-run` to inspect the verified file plan, `--architecture clean-layered` to change the application layout, `--workflow spec-driven` for OpenSpec, or `--advanced` to answer every remaining control question. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable error instead of silently weakening SBOM accuracy.
+Use `--dry-run` to inspect the verified file plan, `--scm azure-devops` when a new Azure Repos project has no origin yet, `--architecture clean-layered` to change the application layout, `--workflow spec-driven` for OpenSpec, or `--advanced` to answer every remaining control question. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable error instead of silently weakening SBOM accuracy.
 
 See [the adoption runbook](docs/runbook.md) for the full procedure and the lower-level Copier escape hatch.
 
 ## Standard profile
 
-The paved path defaults to a lightweight planning workflow, strict local and CI gates, all supported agent clients, a strict CycloneDX SBOM, hardened security automation, and no release workflow. Greenfield users also choose an architecture; adoption preserves existing application and documentation files.
+The paved path defaults to a lightweight planning workflow, strict local and CI gates, all supported agent clients, a strict CycloneDX SBOM, hardened security automation, and no release workflow. GitHub origins receive GitHub Actions controls; Azure Repos origins receive the Azure DevOps adapter and a standalone Azure Pipeline. Greenfield users also choose an architecture; adoption preserves existing application and documentation files.
 
-The advanced profile exposes architecture, topology, workflow, enforcement, client, CI, SBOM, security, and attestation controls. Answers are namespaced under `.agent-standard/` for deterministic updates without colliding with another Copier template.
+The advanced profile exposes architecture, topology, workflow, enforcement, client, CI, SBOM, security, attestation, repository-provider, and Azure central-template controls. Answers are namespaced under `.agent-standard/` for deterministic updates without colliding with another Copier template.
 
 ## Maintainer verification
 
@@ -48,7 +48,7 @@ npm test
 npm run verify:renders
 ```
 
-The render matrix exercises the paved path plus four advanced configurations, including a realistic existing FastAPI repository. It verifies collision preservation, merged Claude settings and CODEOWNERS, client skill discovery, OpenSpec ordering, dependency installation, both SBOM formats, stack-native checks, and an idempotent Copier update.
+The render matrix exercises two paved paths plus five advanced configurations, including a realistic existing FastAPI repository and both Azure Pipeline modes. It verifies provider isolation, collision preservation, managed configuration merges, client skill discovery, OpenSpec ordering, dependency installation, both SBOM formats, stack-native checks, and idempotent Copier updates.
 
 ## Documentation
 
@@ -58,9 +58,11 @@ The render matrix exercises the paved path plus four advanced configurations, in
 - [Conformance levels and states](docs/conformance.md)
 - [Supply-chain standard](docs/supply-chain.md)
 - [GitHub enforcement](docs/github-hardening.md)
+- [Azure DevOps adapter](docs/azure-devops.md)
+- [Azure DevOps enterprise template module](modules/azure-devops/README.md)
 - [Further standardization roadmap](docs/roadmap.md)
 - [Rendered examples](examples/README.md)
 
 ## Status
 
-Pre-release. The current source identifies itself as `0.6.0-dev`; no compatibility promise or release has been published. Repository settings are outside the generator boundary and remain explicitly unverified until an authorized administrator applies and audits them.
+Pre-release. The current source identifies itself as `0.6.0-dev`; no compatibility promise or release has been published. GitHub and Azure DevOps repository settings are outside the generator boundary and remain explicitly unverified until an authorized administrator applies and audits them.

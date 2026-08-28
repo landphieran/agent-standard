@@ -15,6 +15,13 @@ const required = [
   'template/.agent-standard/scripts/sbom.mjs',
   'template/.agent-standard/scripts/sync-skills.mjs',
   'template/.agent-standard/scripts/verify.mjs',
+  'modules/azure-devops/README.md',
+  'modules/azure-devops/templates/agent-standard.yml',
+  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.json{% endif %}.jinja",
+  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}",
+  "template/.agent-standard/scripts/{% if repository_platform == 'azure-devops' %}audit-azure-devops.mjs{% endif %}",
+  "template/.azuredevops/{% if repository_platform == 'azure-devops' %}pull_request_template.md{% endif %}.jinja",
+  "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja",
   'template/{{ _copier_conf.answers_file }}.jinja',
   'bin/agent-standard.mjs',
   'scripts/run-render-verifier.mjs'
@@ -41,8 +48,8 @@ if (manifest) {
   if (manifest.schemaVersion !== 1 || !['AS-1', 'AS-2', 'AS-3', 'AS-4'].includes(manifest.conformanceLevel)) {
     findings.push('source manifest has an unsupported schema or conformance level')
   }
-  if (!manifest.conformance?.target || !manifest.conformance?.status || !manifest.governance?.codeowners || !manifest.workflow?.profile || !manifest.project?.packageManager) {
-    findings.push('source manifest must declare conformance state, governance ownership, and workflow profile')
+  if (!manifest.conformance?.target || !manifest.conformance?.status || !manifest.governance?.owners || !manifest.workflow?.profile || !manifest.project?.packageManager || !['github', 'azure-devops'].includes(manifest.platform?.repository)) {
+    findings.push('source manifest must declare conformance state, governance ownership, workflow profile, and repository platform')
   }
   if (!Array.isArray(manifest.skills) || manifest.skills.length === 0) findings.push('source manifest must declare its generated skill catalog')
   for (const path of manifest.documents || []) if (!existsSync(resolve(root, path))) findings.push(`manifest document ${path} is missing`)
@@ -53,6 +60,15 @@ if (manifest) {
   if (!bom || !['strict', 'advisory'].includes(bom.mode) || bom.formats?.length !== bom.files?.length) {
     findings.push('source manifest BOM configuration is invalid')
   }
+}
+
+const azureAuditPath = "template/.agent-standard/scripts/{% if repository_platform == 'azure-devops' %}audit-azure-devops.mjs{% endif %}"
+if (existsSync(resolve(root, azureAuditPath))) {
+  const result = spawnSync(process.execPath, ['--input-type=module', '--check'], {
+    encoding: 'utf8',
+    input: readFileSync(resolve(root, azureAuditPath), 'utf8')
+  })
+  if (result.status !== 0) findings.push(`${azureAuditPath} has invalid JavaScript: ${(result.stderr || '').trim()}`)
 }
 
 for (const path of [
@@ -72,12 +88,31 @@ for (const path of [
 
 const copier = readFileSync(resolve(root, 'copier.yml'), 'utf8')
 const bootstrap = readFileSync(resolve(root, 'template/.agent-standard/scripts/bootstrap.mjs'), 'utf8')
+const azurePipeline = readFileSync(resolve(root, "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja"), 'utf8')
+const azureCentralTemplate = readFileSync(resolve(root, 'modules/azure-devops/templates/agent-standard.yml'), 'utf8')
 if (!copier.includes('_answers_file: .agent-standard/copier-answers.yml')) findings.push('Copier answers must be namespaced under .agent-standard')
+if (!copier.includes('repository_platform:')) findings.push('Copier must expose a repository platform selection')
+if (!copier.includes('azure_pipeline_mode:')) findings.push('Copier must expose the Azure Pipeline governance mode')
+if (!copier.includes("azure_template_ref | length != 40")) findings.push('Azure Pipeline template refs must require an immutable 40-character commit')
 if (!bootstrap.includes('--gitignore=false')) findings.push('Ruler must keep generated agent files trackable')
 if (!bootstrap.includes('--no-skills')) findings.push('Ruler must not own client skill directories')
 if (!bootstrap.includes("'.agent-standard/scripts/sbom.mjs', '--write'")) findings.push('Bootstrap must refresh the configured SBOM')
 if (!/@fission-ai\/openspec@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('OpenSpec bootstrap must use an exact version')
 if (!/@intellectronica\/ruler@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('Ruler bootstrap must use an exact version')
+for (const required of ['pr: none', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1', 'extends:']) {
+  if (!azurePipeline.includes(required)) findings.push(`Azure Pipeline template is missing ${required}`)
+}
+for (const required of ['parameters:', 'stages:', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Dependency-Scanning@1', 'AdvancedSecurity-Codeql-Analyze@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1']) {
+  if (!azureCentralTemplate.includes(required)) findings.push(`Azure central template is missing ${required}`)
+}
+if (/\b(?:script|bash|powershell):\s*\$\{\{\s*parameters\./.test(azureCentralTemplate)) findings.push('Azure central template must not interpolate parameters into shell commands')
+
+for (const relative of [
+  'template/.agent-standard/manifest.schema.json',
+  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}"
+]) {
+  try { JSON.parse(readFileSync(resolve(root, relative), 'utf8')) } catch (error) { findings.push(`${relative} is invalid JSON: ${error.message}`) }
+}
 
 for (const path of [...filesBelow('.github'), ...filesBelow('template/.github')].filter(path => ['.yml', '.jinja'].includes(extname(path)))) {
   const workflow = readFileSync(resolve(root, path), 'utf8')

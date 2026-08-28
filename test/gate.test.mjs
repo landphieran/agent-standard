@@ -160,6 +160,21 @@ test('CI mode — source WITH test and green suite — passes', () => {
   cleanup(d)
 })
 
+test('CI mode treats files in the first commit as changed', () => {
+  const d = mkdtempSync(join(tmpdir(), 'dod-root-'))
+  const git = a => execFileSync('git', a, { cwd: d, stdio: 'ignore' })
+  git(['init', '-q'])
+  git(['config', 'user.email', 't@t']); git(['config', 'user.name', 't'])
+  write(d, '.agent-standard/gate.json', JSON.stringify(GATE_CFG))
+  write(d, 'src/foo.ts')
+  git(['add', '-A']); git(['commit', '-qm', 'initial source without test'])
+
+  const r = runCI(d, '0000000000000000000000000000000000000000')
+  assert.equal(r.code, 1)
+  assert.match(r.stderr, /no recognised test changed/)
+  cleanup(d)
+})
+
 test('CI advisory mode reports findings but exits zero', () => {
   const d = makeRepo({ ...GATE_CFG, mode: 'advisory' })
   const git = a => execFileSync('git', a, { cwd: d, stdio: 'ignore' })

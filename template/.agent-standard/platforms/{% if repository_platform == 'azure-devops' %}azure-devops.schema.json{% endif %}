@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/landphieran/agent-standard/azure-devops.schema.json",
+  "title": "agent-standard Azure DevOps adapter configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "service", "defaultBranch", "pipeline", "ownership", "branchPolicies", "advancedSecurity"],
+  "properties": {
+    "$schema": { "const": "./azure-devops.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "service": { "const": "azure-devops-services" },
+    "defaultBranch": { "type": "string", "pattern": "^(?![/-])(?!.*\\.\\.)(?!.*[~^:\\\\ ])(?!.*\\/$)[A-Za-z0-9._/-]+$" },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "path", "definitionId", "template"],
+      "properties": {
+        "mode": { "enum": ["none", "standalone", "extends"] },
+        "path": { "const": "azure-pipelines.yml" },
+        "definitionId": { "type": ["integer", "null"], "minimum": 1 },
+        "template": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["repository", "ref", "path"],
+              "properties": {
+                "repository": { "type": "string", "pattern": "^[^/:\\\\]+/[^/:\\\\]+$" },
+                "ref": { "type": "string", "pattern": "^[a-fA-F0-9]{40}$", "not": { "const": "0000000000000000000000000000000000000000" } },
+                "path": { "type": "string", "pattern": "^(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+\\.ya?ml$" }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "extends" } }, "required": ["mode"] },
+          "then": { "properties": { "template": { "type": "object" } } },
+          "else": { "properties": { "template": { "type": "null" } } }
+        }
+      ]
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aliases", "requiredReviewerIds"],
+      "properties": {
+        "aliases": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$" } },
+        "requiredReviewerIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" }
+        }
+      }
+    },
+    "branchPolicies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumReviewers", "creatorVoteCounts", "allowDownvotes", "resetVotesOnPush", "requireDesignatedReviewers", "requireLinkedWorkItems", "requireCommentResolution", "buildValidation", "securityStatusCheck"],
+      "properties": {
+        "minimumReviewers": { "type": "integer", "minimum": 1 },
+        "creatorVoteCounts": { "const": false },
+        "allowDownvotes": { "const": false },
+        "resetVotesOnPush": { "const": true },
+        "requireDesignatedReviewers": { "const": true },
+        "requireLinkedWorkItems": { "type": "boolean" },
+        "requireCommentResolution": { "type": "boolean" },
+        "buildValidation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "manualQueueOnly", "queueOnSourceUpdateOnly", "validDurationMinutes"],
+          "properties": {
+            "required": { "type": "boolean" },
+            "manualQueueOnly": { "const": false },
+            "queueOnSourceUpdateOnly": { "const": false },
+            "validDurationMinutes": { "const": 0 }
+          }
+        },
+        "securityStatusCheck": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "genre", "name", "invalidateOnSourceUpdate", "applicability"],
+          "properties": {
+            "required": { "type": "boolean" },
+            "genre": { "const": "AdvancedSecurity" },
+            "name": { "enum": ["NewHighAndCritical", "AllHighAndCritical"] },
+            "invalidateOnSourceUpdate": { "const": true },
+            "applicability": { "const": "default" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "buildValidation": {
+                "properties": { "required": { "const": true } },
+                "required": ["required"]
+              }
+            },
+            "required": ["buildValidation"]
+          },
+          "then": {
+            "properties": {
+              "securityStatusCheck": {
+                "properties": { "required": { "const": true } },
+                "required": ["required"]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "securityStatusCheck": {
+                "properties": { "required": { "const": false } },
+                "required": ["required"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "advancedSecurity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codeSecurity", "dependencyScanning", "codeql", "secretProtection", "secretPushProtection"],
+      "properties": {
+        "codeSecurity": { "type": "boolean" },
+        "dependencyScanning": { "type": "boolean" },
+        "codeql": { "type": "boolean" },
+        "secretProtection": { "type": "boolean" },
+        "secretPushProtection": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "codeql": { "const": true } }, "required": ["codeql"] },
+          "then": {
+            "properties": {
+              "codeSecurity": { "const": true },
+              "dependencyScanning": { "const": true }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "secretPushProtection": { "const": true } }, "required": ["secretPushProtection"] },
+          "then": {
+            "properties": {
+              "secretProtection": { "const": true }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "codeSecurity": { "const": false } }, "required": ["codeSecurity"] },
+          "then": {
+            "properties": {
+              "dependencyScanning": { "const": false },
+              "codeql": { "const": false }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "branchPolicies": {
+            "properties": {
+              "securityStatusCheck": {
+                "properties": { "required": { "const": true } },
+                "required": ["required"]
+              }
+            },
+            "required": ["securityStatusCheck"]
+          }
+        },
+        "required": ["branchPolicies"]
+      },
+      "then": {
+        "properties": {
+          "advancedSecurity": {
+            "properties": { "codeSecurity": { "const": true } },
+            "required": ["codeSecurity"]
+          }
+        }
+      }
+    }
+  ]
+}

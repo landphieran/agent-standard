@@ -7,7 +7,7 @@
 setup_profile: advanced
 project_name: payments-api
 language_stack: py-fastapi
-codeowners: "@example/payments"
+owners: "@example/payments"
 architecture: service-based
 topology: modular-monolith
 mode: adopt

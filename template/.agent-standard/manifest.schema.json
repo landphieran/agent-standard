@@ -4,7 +4,7 @@
   "title": "agent-standard project manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "standardVersion", "conformanceLevel", "conformance", "project", "governance", "agents", "workflow", "commands", "documents", "skills", "qualityGate", "supplyChain"],
+  "required": ["schemaVersion", "standardVersion", "conformanceLevel", "conformance", "project", "platform", "governance", "agents", "workflow", "commands", "documents", "skills", "qualityGate", "supplyChain"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
@@ -35,11 +35,41 @@
         "mode": { "enum": ["greenfield", "adopt"] }
       }
     },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "ci", "pipelineMode"],
+      "properties": {
+        "repository": { "enum": ["github", "azure-devops"] },
+        "ci": { "enum": ["none", "github-actions", "azure-pipelines"] },
+        "pipelineMode": { "enum": ["none", "standalone", "extends"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "repository": { "const": "github" } }, "required": ["repository"] },
+          "then": {
+            "properties": {
+              "ci": { "enum": ["none", "github-actions"] },
+              "pipelineMode": { "enum": ["none", "standalone"] }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "repository": { "const": "azure-devops" } }, "required": ["repository"] },
+          "then": { "properties": { "ci": { "enum": ["none", "azure-pipelines"] } } }
+        },
+        {
+          "if": { "properties": { "ci": { "const": "none" } }, "required": ["ci"] },
+          "then": { "properties": { "pipelineMode": { "const": "none" } } },
+          "else": { "properties": { "pipelineMode": { "enum": ["standalone", "extends"] } } }
+        }
+      ]
+    },
     "governance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["codeowners"],
-      "properties": { "codeowners": { "type": "string", "pattern": "^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?( +@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?)*$" } }
+      "required": ["owners"],
+      "properties": { "owners": { "type": "string", "pattern": "^@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?( +@[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?)*$" } }
     },
     "agents": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["claude", "codex", "copilot"] } },
     "workflow": {

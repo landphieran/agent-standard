@@ -1,0 +1,92 @@
+parameters:
+  - name: stack
+    type: string
+    values:
+      - ts-node
+      - ts-next
+      - py-fastapi
+  - name: securityProfile
+    type: string
+    values:
+      - baseline
+      - hardened
+  - name: sbomFormats
+    type: object
+    default:
+      - cyclonedx-json
+
+stages:
+  - stage: agent_standard
+    displayName: Agent standard
+    jobs:
+      - job: verify
+        displayName: Verify repository contract
+        pool:
+          vmImage: ubuntu-latest
+        variables:
+          ${{ if eq(parameters.stack, 'py-fastapi') }}:
+            codeqlLanguage: python
+          ${{ else }}:
+            codeqlLanguage: javascript
+        steps:
+          - checkout: self
+            clean: true
+            fetchDepth: 0
+
+          - task: UseNode@1
+            displayName: Use Node.js 22
+            inputs:
+              version: 22.x
+
+          - ${{ if eq(parameters.securityProfile, 'hardened') }}:
+              - task: AdvancedSecurity-Codeql-Init@1
+                displayName: Initialize CodeQL
+                inputs:
+                  languages: $(codeqlLanguage)
+                  enableAutomaticCodeQLInstall: true
+
+          - ${{ if in(parameters.stack, 'ts-node', 'ts-next') }}:
+              - script: npm ci
+                displayName: Install locked dependencies
+
+          - ${{ if eq(parameters.stack, 'ts-next') }}:
+              - script: npx playwright install --with-deps chromium
+                displayName: Install Playwright Chromium
+
+          - ${{ if eq(parameters.stack, 'py-fastapi') }}:
+              - script: python -m pip install uv==0.10.8
+                displayName: Install pinned uv
+              - script: uv sync --locked --all-groups
+                displayName: Install locked dependencies
+
+          - script: node .agent-standard/scripts/verify.mjs
+            displayName: Verify repository contract
+
+          - script: node .agent-standard/scripts/dod.mjs --ci --policy-only
+            displayName: Verify change policy
+            env:
+              DOD_BASE: HEAD^1
+              DOD_HEAD: HEAD
+
+          - task: AdvancedSecurity-Dependency-Scanning@1
+            displayName: Scan dependencies
+
+          - ${{ if eq(parameters.securityProfile, 'hardened') }}:
+              - task: AdvancedSecurity-Codeql-Analyze@1
+                displayName: Analyze CodeQL database
+                inputs:
+                  WaitForProcessing: true
+
+          - ${{ if containsValue(parameters.sbomFormats, 'cyclonedx-json') }}:
+              - task: PublishPipelineArtifact@1
+                displayName: Publish CycloneDX SBOM
+                inputs:
+                  targetPath: bom.cdx.json
+                  artifact: agent-standard-cyclonedx-sbom
+
+          - ${{ if containsValue(parameters.sbomFormats, 'spdx-json') }}:
+              - task: PublishPipelineArtifact@1
+                displayName: Publish SPDX SBOM
+                inputs:
+                  targetPath: bom.spdx.json
+                  artifact: agent-standard-spdx-sbom

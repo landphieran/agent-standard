@@ -40,7 +40,7 @@ Running Ruler without skill ownership, synchronizing the standard skills, and in
 | managed provider review block and Claude hook | merge script | Idempotent additions that preserve surrounding project configuration |
 | `.github/CODEOWNERS`, Dependabot, PR template, workflows | GitHub adapter | Emitted only for GitHub repositories |
 | `.agent-standard/platforms/azure-devops.json`, `.azuredevops/`, `azure-pipelines.yml` | Azure DevOps adapter | Emitted only for Azure DevOps repositories; standalone or immutable central-template entry point |
-| `modules/azure-devops/**` | agent-standard/platform team | Reference enterprise extending template; vendored into a protected organization repository, never rendered into applications |
+| `modules/azure-devops/**` | agent-standard/platform team | Reference enterprise extending template and machine-readable organization baseline; vendored into protected organization repositories, never rendered into applications |
 | GitHub rulesets or Azure Repos policies/security settings | authorized repository administrators | External state; never mutated by the template |
 
 ## Architecture axes
@@ -56,7 +56,8 @@ The Claude Stop hook is fast local feedback and is bypassable by design. CI is t
 3. `dod.mjs` checks the changed-file policy: source changes need a recognized test or an owned, expiring waiver; active OpenSpec work must validate.
 4. CI runs full verification followed by policy-only DoD evaluation, avoiding duplicate test execution.
 5. Provider-native dependency/code scanning and published SBOM artifacts add supply-chain evidence.
-6. Separately administered repository policy turns passing jobs into mandatory merge controls; the Azure adapter can audit that state without mutating it.
+6. Separately administered repository policy turns passing jobs into mandatory merge controls; the Azure adapter can audit branch-policy and Advanced Security state without mutating it and emit revision-bound evidence.
+7. Enterprise organization, identity, resource, permission, agent, and retention controls remain administrator-owned and are declared in the Azure enterprise baseline rather than inferred from a passing repository job.
 
 ## Update behavior
 

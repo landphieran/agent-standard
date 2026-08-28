@@ -1,12 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCE = join(REPO, 'template', '.agent-standard', 'scripts', "{% if repository_platform == 'azure-devops' %}audit-azure-devops.mjs{% endif %}")
+const EVIDENCE_SCHEMA = join(REPO, 'template', '.agent-standard', 'evidence', "{% if repository_platform == 'azure-devops' %}azure-devops-audit.schema.json{% endif %}")
 
 async function loadEvaluator (t) {
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-azure-audit-'))
@@ -142,4 +144,52 @@ test('Azure DevOps remote evaluator reports policy and security drift by control
     result.controls.filter(control => control.status === 'fail').map(control => control.id),
     ['AS-ADO-PR-004', 'AS-ADO-CI-001', 'AS-ADO-SEC-004', 'AS-ADO-SEC-001', 'AS-ADO-SEC-003']
   )
+})
+
+test('Azure DevOps audit writes revision-bound, versioned evidence', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-azure-evidence-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const scriptPath = join(root, 'audit-azure-devops.mjs')
+  const configPath = join(root, '.agent-standard', 'platforms', 'azure-devops.json')
+  const manifestPath = join(root, '.agent-standard', 'manifest.json')
+  const policyPath = join(root, 'policies.json')
+  const securityPath = join(root, 'security.json')
+  const outputPath = join(root, 'audit-evidence.json')
+  const scriptConfig = { ...config, defaultBranch: 'main' }
+
+  mkdirSync(dirname(configPath), { recursive: true })
+  writeFileSync(scriptPath, readFileSync(SOURCE, 'utf8'))
+  writeFileSync(configPath, JSON.stringify(scriptConfig))
+  writeFileSync(manifestPath, JSON.stringify({ standardVersion: '0.6.0-dev' }))
+  writeFileSync(policyPath, JSON.stringify(policies))
+  writeFileSync(securityPath, JSON.stringify({
+    codeSecurityFeatures: { codeSecurityEnabled: true },
+    secretProtectionFeatures: { secretProtectionEnabled: true, blockPushes: true }
+  }))
+
+  const result = spawnSync(process.execPath, [
+    scriptPath,
+    '--policy-file', policyPath,
+    '--security-file', securityPath,
+    '--output', outputPath,
+    '--json'
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AGENT_STANDARD_ROOT: root,
+      BUILD_SOURCEVERSION: '0123456789abcdef0123456789abcdef01234567'
+    }
+  })
+
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`)
+  const evidence = JSON.parse(readFileSync(outputPath, 'utf8'))
+  assert.equal(evidence.evidenceType, 'agent-standard/azure-devops-remote-audit')
+  assert.equal(evidence.standardVersion, '0.6.0-dev')
+  assert.equal(evidence.evaluationMode, 'offline')
+  assert.match(evidence.configurationSha256, /^[0-9a-f]{64}$/)
+  assert.equal(evidence.sourceRevision, '0123456789abcdef0123456789abcdef01234567')
+  assert.equal(evidence.ok, true)
+  assert.deepEqual(JSON.parse(result.stdout), evidence)
+  assert.equal(JSON.parse(readFileSync(EVIDENCE_SCHEMA, 'utf8')).properties.evidenceType.const, evidence.evidenceType)
 })

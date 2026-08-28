@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -104,6 +105,38 @@ export function evaluateAzureDevOps (config, policies, security = null) {
   return { ok: controls.every(control => control.status === 'pass'), controls }
 }
 
+export function createAuditEvidence ({
+  standardVersion,
+  configurationText,
+  sourceRevision,
+  evaluationMode,
+  organization,
+  project,
+  repository,
+  branch,
+  evaluation,
+  evaluatedAt = new Date().toISOString()
+}) {
+  const revision = /^[0-9a-f]{40}$/i.test(sourceRevision || '') ? sourceRevision.toLowerCase() : null
+  return {
+    evidenceType: 'agent-standard/azure-devops-remote-audit',
+    schemaVersion: 1,
+    provider: 'azure-devops',
+    standardVersion,
+    evaluationMode,
+    configurationSha256: createHash('sha256').update(configurationText).digest('hex'),
+    sourceRevision: revision,
+    scope: {
+      organization: organization || null,
+      project: project || null,
+      repository: repository || null
+    },
+    targetBranch: branch,
+    evaluatedAt,
+    ...evaluation
+  }
+}
+
 function parseArgs (values) {
   const args = [...values]
   const take = name => {
@@ -127,6 +160,7 @@ function parseArgs (values) {
     branch: take('--branch'),
     policyFile: take('--policy-file'),
     securityFile: take('--security-file'),
+    output: take('--output'),
     json: flag('--json')
   }
   if (args.length) throw new Error(`unexpected arguments: ${args.join(' ')}`)
@@ -197,27 +231,37 @@ async function main () {
   const root = resolve(process.env.AGENT_STANDARD_ROOT || process.cwd())
   const configPath = resolve(root, '.agent-standard/platforms/azure-devops.json')
   if (!existsSync(configPath)) throw new Error('.agent-standard/platforms/azure-devops.json is missing')
-  const config = readJson(configPath)
+  const configurationText = readFileSync(configPath, 'utf8').replace(/^\uFEFF/, '')
+  const config = JSON.parse(configurationText)
+  const manifest = readJson(resolve(root, '.agent-standard/manifest.json'))
+  if (typeof manifest.standardVersion !== 'string' || !manifest.standardVersion) {
+    throw new Error('.agent-standard/manifest.json must declare standardVersion')
+  }
   const options = parseArgs(process.argv.slice(2))
   const branch = options.branch || config.defaultBranch
   const policyResponse = readPolicies(options, branch)
   const policies = Array.isArray(policyResponse) ? policyResponse : policyResponse?.value
   if (!Array.isArray(policies)) throw new Error('Azure policy response must contain a JSON array')
-  const security = await readSecurity(options, Object.values(config.advancedSecurity || {}).some(Boolean))
+  const securityRequired = Object.values(config.advancedSecurity || {}).some(Boolean)
+  const security = await readSecurity(options, securityRequired)
   const evaluation = evaluateAzureDevOps(config, policies, security)
-  const result = {
-    schemaVersion: 1,
-    provider: 'azure-devops',
-    scope: {
-      organization: options.organization || null,
-      project: options.project || null,
-      repository: options.repository || null
-    },
-    targetBranch: branch,
-    evaluatedAt: new Date().toISOString(),
-    ...evaluation
-  }
-  if (options.json) console.log(JSON.stringify(result, null, 2))
+  const liveInputs = Number(!options.policyFile) + Number(securityRequired && !options.securityFile)
+  const offlineInputs = Number(Boolean(options.policyFile)) + Number(securityRequired && Boolean(options.securityFile))
+  const evaluationMode = liveInputs && offlineInputs ? 'mixed' : liveInputs ? 'live' : 'offline'
+  const result = createAuditEvidence({
+    standardVersion: manifest.standardVersion,
+    configurationText,
+    sourceRevision: process.env.BUILD_SOURCEVERSION,
+    evaluationMode,
+    organization: options.organization,
+    project: options.project,
+    repository: options.repository,
+    branch,
+    evaluation
+  })
+  const serialized = JSON.stringify(result, null, 2)
+  if (options.output) writeFileSync(resolve(options.output), `${serialized}\n`, 'utf8')
+  if (options.json) console.log(serialized)
   else if (result.ok) console.log(`agent-standard Azure DevOps audit: remote controls pass for ${branch}`)
   else console.error(`agent-standard Azure DevOps audit findings:\n- ${result.controls.filter(control => control.status === 'fail').map(control => `${control.id}: ${control.detail}`).join('\n- ')}`)
   return result.ok ? 0 : 1

@@ -102,6 +102,6 @@ After the three-way merge:
 Generated workflows provide checks but do not make themselves mandatory. After the first push is green, an authorized administrator must apply and audit the provider controls:
 
 - GitHub: branch rulesets and security settings in [github-hardening.md](github-hardening.md).
-- Azure DevOps: required Build Validation, review policies, Advanced Security, and the read-only audit in [azure-devops.md](azure-devops.md).
+- Azure DevOps: required Build Validation, review policies, Advanced Security, revision-bound read-only audit evidence, and the administrator baseline in [azure-devops.md](azure-devops.md) and [enterprise-adoption.md](enterprise-adoption.md).
 
 Until that external state is audited, the manifest remains `pending-remote` or `adopting`; local success alone is not a conformance claim. The generator never uses setup as implicit authorization to mutate remote policy.

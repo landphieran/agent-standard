@@ -16,9 +16,12 @@ const required = [
   'template/.agent-standard/scripts/sync-skills.mjs',
   'template/.agent-standard/scripts/verify.mjs',
   'modules/azure-devops/README.md',
+  'modules/azure-devops/enterprise-baseline.json',
+  'modules/azure-devops/enterprise-baseline.schema.json',
   'modules/azure-devops/templates/agent-standard.yml',
   "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.json{% endif %}.jinja",
   "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}",
+  "template/.agent-standard/evidence/{% if repository_platform == 'azure-devops' %}azure-devops-audit.schema.json{% endif %}",
   "template/.agent-standard/scripts/{% if repository_platform == 'azure-devops' %}audit-azure-devops.mjs{% endif %}",
   "template/.azuredevops/{% if repository_platform == 'azure-devops' %}pull_request_template.md{% endif %}.jinja",
   "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja",
@@ -99,17 +102,20 @@ if (!bootstrap.includes('--no-skills')) findings.push('Ruler must not own client
 if (!bootstrap.includes("'.agent-standard/scripts/sbom.mjs', '--write'")) findings.push('Bootstrap must refresh the configured SBOM')
 if (!/@fission-ai\/openspec@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('OpenSpec bootstrap must use an exact version')
 if (!/@intellectronica\/ruler@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('Ruler bootstrap must use an exact version')
-for (const required of ['pr: none', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1', 'extends:']) {
+for (const required of ['pr: none', 'batch: true', 'fetchDepth: 0', 'fetchTags: false', 'persistCredentials: false', 'timeoutInMinutes: 30', 'clean: all', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1', 'extends:']) {
   if (!azurePipeline.includes(required)) findings.push(`Azure Pipeline template is missing ${required}`)
 }
-for (const required of ['parameters:', 'stages:', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Dependency-Scanning@1', 'AdvancedSecurity-Codeql-Analyze@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1']) {
+for (const required of ['parameters:', 'stages:', 'fetchDepth: 0', 'fetchTags: false', 'persistCredentials: false', 'timeoutInMinutes: 30', 'clean: all', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Dependency-Scanning@1', 'AdvancedSecurity-Codeql-Analyze@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1']) {
   if (!azureCentralTemplate.includes(required)) findings.push(`Azure central template is missing ${required}`)
 }
 if (/\b(?:script|bash|powershell):\s*\$\{\{\s*parameters\./.test(azureCentralTemplate)) findings.push('Azure central template must not interpolate parameters into shell commands')
 
 for (const relative of [
   'template/.agent-standard/manifest.schema.json',
-  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}"
+  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}",
+  "template/.agent-standard/evidence/{% if repository_platform == 'azure-devops' %}azure-devops-audit.schema.json{% endif %}",
+  'modules/azure-devops/enterprise-baseline.json',
+  'modules/azure-devops/enterprise-baseline.schema.json'
 ]) {
   try { JSON.parse(readFileSync(resolve(root, relative), 'utf8')) } catch (error) { findings.push(`${relative} is invalid JSON: ${error.message}`) }
 }

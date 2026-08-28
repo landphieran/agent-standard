@@ -21,8 +21,12 @@ stages:
     jobs:
       - job: verify
         displayName: Verify repository contract
+        timeoutInMinutes: 30
+        cancelTimeoutInMinutes: 1
         pool:
           vmImage: ubuntu-latest
+        workspace:
+          clean: all
         variables:
           ${{ if eq(parameters.stack, 'py-fastapi') }}:
             codeqlLanguage: python
@@ -32,6 +36,8 @@ stages:
           - checkout: self
             clean: true
             fetchDepth: 0
+            fetchTags: false
+            persistCredentials: false
 
           - task: UseNode@1
             displayName: Use Node.js 22

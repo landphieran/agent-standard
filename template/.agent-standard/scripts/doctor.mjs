@@ -353,9 +353,14 @@ function checkManagedConfiguration (manifest) {
   if (!manifest.qualityGate?.ci || !existsSync(pipelinePath) || (setup && manifest.project?.mode === 'adopt')) return
   const pipeline = readFileSync(pipelinePath, 'utf8')
   if (!/^pr:\s*none\s*$/m.test(pipeline)) note('azure-pipelines.yml must disable unsupported Azure Repos YAML PR triggers')
+  if (!/^\s*batch:\s*true\s*$/m.test(pipeline)) note('azure-pipelines.yml must batch protected-branch CI updates')
   if (manifest.platform.pipelineMode === 'standalone') {
     for (const required of [
       'fetchDepth: 0',
+      'fetchTags: false',
+      'persistCredentials: false',
+      'timeoutInMinutes: 30',
+      'clean: all',
       'node .agent-standard/scripts/verify.mjs',
       'node .agent-standard/scripts/dod.mjs --ci --policy-only',
       'DOD_BASE: HEAD^1',
@@ -408,6 +413,7 @@ function main () {
     required.push(
       '.agent-standard/platforms/azure-devops.json',
       '.agent-standard/platforms/azure-devops.schema.json',
+      '.agent-standard/evidence/azure-devops-audit.schema.json',
       '.agent-standard/scripts/audit-azure-devops.mjs',
       '.azuredevops/pull_request_template.md'
     )

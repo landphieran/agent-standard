@@ -114,6 +114,7 @@ function azureFixture () {
   azureManifest.platform = { repository: 'azure-devops', ci: 'azure-pipelines', pipelineMode: 'standalone' }
   write(root, '.agent-standard/manifest.json', JSON.stringify(azureManifest))
   write(root, '.agent-standard/platforms/azure-devops.schema.json', '{}')
+  write(root, '.agent-standard/evidence/azure-devops-audit.schema.json', '{}')
   write(root, '.agent-standard/platforms/azure-devops.json', JSON.stringify({
     $schema: './azure-devops.schema.json',
     schemaVersion: 1,
@@ -149,22 +150,30 @@ function azureFixture () {
   write(root, '.agent-standard/scripts/audit-azure-devops.mjs', '')
   write(root, '.azuredevops/pull_request_template.md', '<!-- agent-standard:start -->\n## Agent-standard checks\n<!-- agent-standard:end -->\n')
   write(root, 'azure-pipelines.yml', [
-    'trigger: none',
+    'trigger:',
+    '  batch: true',
     'pr: none',
-    'steps:',
-    '  - checkout: self',
-    '    fetchDepth: 0',
-    '  - script: node .agent-standard/scripts/verify.mjs',
-    '  - script: node .agent-standard/scripts/dod.mjs --ci --policy-only',
-    '    env:',
-    '      DOD_BASE: HEAD^1',
-    '  - task: UseNode@1',
-    '    inputs:',
-    '      version: 22.x',
-    '  - task: AdvancedSecurity-Dependency-Scanning@1',
-    '  - task: PublishPipelineArtifact@1',
-    '    inputs:',
-    '      targetPath: bom.cdx.json',
+    'jobs:',
+    '  - job: verify',
+    '    timeoutInMinutes: 30',
+    '    workspace:',
+    '      clean: all',
+    '    steps:',
+    '      - checkout: self',
+    '        fetchDepth: 0',
+    '        fetchTags: false',
+    '        persistCredentials: false',
+    '      - script: node .agent-standard/scripts/verify.mjs',
+    '      - script: node .agent-standard/scripts/dod.mjs --ci --policy-only',
+    '        env:',
+    '          DOD_BASE: HEAD^1',
+    '      - task: UseNode@1',
+    '        inputs:',
+    '          version: 22.x',
+    '      - task: AdvancedSecurity-Dependency-Scanning@1',
+    '      - task: PublishPipelineArtifact@1',
+    '        inputs:',
+    '          targetPath: bom.cdx.json',
     ''
   ].join('\n'))
   return root

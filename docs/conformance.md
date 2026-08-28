@@ -24,6 +24,8 @@ The template targets AS-3. Generating an attestation workflow is necessary but n
 
 The doctor reports target, state, local enforcement, and remote enforcement separately. It never promotes a repository automatically and never equates a green local run with AS-3 conformance.
 
+`AS-ENT-*` controls in the Azure enterprise baseline are an organization overlay. A repository may satisfy the portable AS-3 contract while enterprise admission remains pending; an enterprise should not label it conformant until the applicable identity, pipeline, resource, permission, agent, audit, and evidence controls are also approved.
+
 ## Initial control identifiers
 
 | ID | Control | Automated evidence |
@@ -35,7 +37,7 @@ The doctor reports target, state, local enforcement, and remote enforcement sepa
 | AS-QUAL-002 | Stack-native lint, type, test, and build checks pass | Full verification command |
 | AS-SUPPLY-001 | Selected CycloneDX/SPDX BOM is valid and current with locked dependency identities | SBOM checker |
 | AS-SUPPLY-002 | External workflow references are immutable and dependency changes are reviewed | Source checks plus provider workflows/pipelines |
-| AS-REMOTE-001 | Pull requests, required jobs, owner review, and security features are enforced | Authorized provider audit; Azure emits `AS-ADO-*` results |
+| AS-REMOTE-001 | Pull requests, required jobs, owner review, and security features are enforced | Authorized provider audit; Azure emits schema-versioned, revision-bound `AS-ADO-*` results |
 | AS-PROV-001 | A released subject carries verifiable build/SBOM provenance | Optional release profile plus consumer verification |
 
-The next evidence revision should make control results first-class machine-readable records and map them to organization policy frameworks without expanding the minimum repository footprint.
+The next evidence revision should combine provider results with local checks, administrative controls, approvals, and exceptions, then map the bundle to organization policy frameworks without expanding the minimum application-repository footprint.

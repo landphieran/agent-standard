@@ -59,6 +59,7 @@ The render matrix exercises two paved paths plus five advanced configurations, i
 - [Supply-chain standard](docs/supply-chain.md)
 - [GitHub enforcement](docs/github-hardening.md)
 - [Azure DevOps adapter](docs/azure-devops.md)
+- [Enterprise adoption and remaining controls](docs/enterprise-adoption.md)
 - [Azure DevOps enterprise template module](modules/azure-devops/README.md)
 - [Further standardization roadmap](docs/roadmap.md)
 - [Rendered examples](examples/README.md)

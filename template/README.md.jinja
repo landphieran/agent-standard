@@ -5,9 +5,11 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 | Setting | Value |
 |---|---|
 | Stack | `{{ language_stack }}` |
+| Package manager | `{% if language_stack in ['ts-node', 'ts-next'] %}npm{% else %}uv{% endif %}` |
 | Architecture | `{{ architecture }}` |
 | Deployment topology | `{{ topology }}` |
 | Mode | `{{ mode }}` |
+| Change workflow | `{{ workflow_profile }}` |
 | Definition-of-done gate | `{{ gate }}` |
 | Agent rulebooks | {{ agents | join(', ') }} |
 | CI required check | {{ "yes" if ci else "no" }} |
@@ -16,13 +18,18 @@ Standardised with **agent-standard** — a paved path for agent-driven developme
 
 ## What this repo carries
 
-- **Planning process** — OpenSpec (`openspec/`): every change starts as a spec, becomes
-  a plan and tasks, and is validated before it is archived.
+{% if workflow_profile == 'spec-driven' -%}
+- **Planning process** — OpenSpec (`openspec/`) provides proposals, plans, tasks,
+  validation, and archival for non-trivial changes.
+{% else -%}
+- **Planning process** — acceptance criteria live in pull requests; non-trivial or
+  high-risk work uses a proportional plan in `docs/changes/`.
+{% endif -%}
 - **Agent rulebook** — one source in `.ruler/`, fanned out to {{ agents | join(', ') }}.
 - **Definition-of-done gate** — work is not "done" until the plan is satisfied and tests
   exist in the right place, of the right type, and pass.
 - **Repository contract** — `.agent-standard/manifest.json` declares commands, docs, skills,
-  security profile, waivers, and the required CycloneDX/SPDX bill of materials.
+  ownership, conformance state, security profile, waivers, and the required CycloneDX/SPDX bill of materials.
 {% if mode == 'greenfield' %}- **Project skeleton** — a {{ architecture }} layout for {{ language_stack }}.{% endif %}
 
 ## Working here
@@ -37,17 +44,18 @@ npm run agent:verify
 ```bash
 uv sync
 node .agent-standard/scripts/sbom.mjs --write
-node .agent-standard/scripts/doctor.mjs
+node .agent-standard/scripts/verify.mjs
 ```
 {% endif -%}
 
 The gate runs fast tests locally (a Claude Code stop hook) and the complete contract{{ " " }}
-{%- if ci %}as a required CI check{% else %}— CI enforcement is disabled for this repo{% endif %}.
+{%- if ci %}as a CI job intended to be required by the repository ruleset{% else %}— CI enforcement is disabled for this repo{% endif %}.
+The manifest keeps local results separate from remotely audited enforcement, so a green local run does not overclaim conformance.
 
 ## Updating the standard
 
 ```bash
-copier update --trust
+copier update --trust --answers-file .agent-standard/copier-answers.yml
 ```
 
 After an update, reinstall dependencies, refresh the SBOM, run the manifest verification

@@ -1,57 +1,57 @@
 # Architecture
 
-agent-standard is a versioned conformance specification with a reference generator. Its public API is the Copier answer model; its output is a repository contract that humans, agents, and CI can all inspect.
+agent-standard is a conformance contract with a reference generator. The recommended CLI narrows the setup surface and adds transaction safety; Copier remains the versioned rendering engine underneath it.
 
 ```mermaid
 flowchart TD
-  C[Copier answers] --> T[Rendered project contract]
-  T --> M[Manifest and schema]
-  T --> R[.ruler rules and skills]
-  T --> O[OpenSpec change workflow]
-  T --> D[Governed docs and ADRs]
-  T --> Q[DoD and BOM gates]
-  R --> A[Tracked client instructions and skills]
-  M --> V[Doctor]
-  D --> V
-  Q --> V
-  V --> CI[Required CI checks]
-  CI --> S[Build SBOM and optional attestations]
+  I[Transactional init] --> W[Temporary Git worktree]
+  W --> C[Copier standard or advanced answers]
+  C --> B[Bootstrap]
+  B --> R[Ruler instructions]
+  R --> K[Shared skill copies]
+  K --> O{Spec-driven?}
+  O -->|yes| P[OpenSpec client workflows]
+  O -->|no| L[Lightweight change plans]
+  P --> M[Config merge + SBOM + doctor]
+  L --> M
+  M --> A[Atomic apply to destination]
+  A --> V[One local verification command]
+  V --> G[GitHub checks]
+  G --> E[Authorized ruleset enforcement]
 ```
+
+Running Ruler without skill ownership, synchronizing the standard skills, and initializing OpenSpec last prevents one generator from erasing another generator’s client artifacts.
 
 ## Ownership seams
 
 | Path | Owner | Contract |
 |---|---|---|
 | application skeleton and configs | Copier | Rendered only for greenfield projects |
-| `.copier-answers.yml` | Copier | Recorded update inputs; do not hand-edit |
-| `.ruler/**` | agent-standard/Ruler | Canonical rules and skills |
-| `AGENTS.md`, `CLAUDE.md`, client skill directories | Ruler | Generated but intentionally committed and reviewed |
-| `openspec/**`, OpenSpec client skills | OpenSpec | Initialized or updated by the pinned CLI |
-| `.agent-standard/**` | agent-standard | Manifest, schema, gate configuration, waivers, doctor, and SBOM tooling |
-| `docs/**`, `SECURITY.md`, `CONTRIBUTING.md` | repository maintainers | Governed documentation kernel |
-| `.github/**` | agent-standard plus maintainers | CI baseline; repositories may add stricter jobs |
+| existing README/security/docs/config | repository team | Preserved on initial adoption |
+| `.agent-standard/copier-answers.yml` | Copier | Namespaced update inputs; do not hand-edit casually |
+| `.ruler/**` | agent-standard/Ruler | Canonical rules and standard skills |
+| `AGENTS.md`, `CLAUDE.md` | Ruler | Generated, tracked, and reviewed |
+| `.claude/skills/**`, `.agents/skills/**`, `.github/skills/**` | standard skill sync | Generated, tracked client discovery surfaces |
+| `openspec/**` and OpenSpec client artifacts | OpenSpec | Present only in the spec-driven profile |
+| `.agent-standard/**` | agent-standard | Manifest, schema, configuration merge, gates, waivers, verification, and SBOM tooling |
+| managed CODEOWNERS block and Claude hook | merge script | Idempotent additions that preserve surrounding project configuration |
+| GitHub rulesets/settings | authorized repository administrators | External state; never mutated by the template |
 
-Ruler runs with `--gitignore=false`, so generated client artifacts survive a fresh clone. Canonical edits still happen in `.ruler/`; CI and review detect missing generated surfaces.
+## Architecture axes
 
-## Two orthogonal architecture axes
-
-`architecture` controls dependency direction inside a deployable unit. `topology` controls how many units deploy and communicate. A clean-layered modular monolith and a clean-layered distributed service are both coherent configurations; making these choices independent removes the previous false either/or.
-
-Greenfield projects receive actual architecture directories with boundary notes. Adoption mode keeps existing code but still creates the manifest and documentation contracts so teams can map current paths deliberately.
+`architecture` controls dependency direction inside a deployable unit. `topology` controls how many units deploy and communicate. Greenfield projects receive boundary notes and a matching skeleton; adoption keeps existing code and records the intended mapping without forcing a reorganization.
 
 ## Enforcement flow
 
-The local Claude Stop hook is fast feedback and remains bypassable by design. CI is the hard boundary.
+The Claude Stop hook is fast local feedback and is bypassable by design. CI is the enforceable repository boundary only after its job is required by a ruleset.
 
-1. The doctor checks the manifest, required tracked files, skill frontmatter, local documentation links, and selected SBOM identities.
-2. The DoD gate compares event SHAs using argument-safe Git execution.
-3. Source changes require a recognised test or an owned, reasoned, unexpired path waiver.
-4. Active OpenSpec changes validate with the pinned CLI.
-5. CI executes the stack's lint, type, test, and build contract.
-6. A pinned Syft action emits a build SBOM in the selected format(s).
-
-Advisory mode reports the same findings and returns success both locally and in CI. Strict mode blocks locally and exits non-zero in CI.
+1. `doctor.mjs` checks required tracked files, skill frontmatter and propagation, workflow artifacts, governed-document metadata and links, the declared toolchain, and SBOM identities.
+2. `verify.mjs` runs the doctor and the complete stack-native lint/type/test/build command once.
+3. `dod.mjs` checks the changed-file policy: source changes need a recognized test or an owned, expiring waiver; active OpenSpec work must validate.
+4. CI runs full verification followed by policy-only DoD evaluation, avoiding duplicate test execution.
+5. Dependency review, CodeQL, and build SBOM jobs add supply-chain evidence.
+6. A separately administered ruleset turns passing jobs into mandatory merge controls.
 
 ## Update behavior
 
-`copier update --trust` re-renders owned files, updates OpenSpec, regenerates Ruler outputs and client skills, and refreshes the SBOM. Teams then reinstall dependencies if manifests changed, regenerate the SBOM from the final lockfile, run the doctor, review all generated diffs, and commit them together.
+`copier update --trust --answers-file .agent-standard/copier-answers.yml` re-renders owned files, regenerates rulebooks and standard skills, refreshes the selected workflow integration, merges managed configuration, and refreshes the SBOM. Teams reinstall when dependency manifests change, run the one verification command, review the entire generated diff, and commit the update together.

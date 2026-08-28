@@ -8,10 +8,16 @@ const required = [
   'AGENTS.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'copier.yml',
   'template/.agent-standard/manifest.json.jinja',
   'template/.agent-standard/manifest.schema.json',
+  'template/.agent-standard/scripts/bootstrap.mjs',
+  'template/.agent-standard/scripts/dod.mjs',
   'template/.agent-standard/scripts/doctor.mjs',
+  'template/.agent-standard/scripts/merge-config.mjs',
   'template/.agent-standard/scripts/sbom.mjs',
   'template/.agent-standard/scripts/sync-skills.mjs',
-  'template/.claude/hooks/dod.mjs'
+  'template/.agent-standard/scripts/verify.mjs',
+  'template/{{ _copier_conf.answers_file }}.jinja',
+  'bin/agent-standard.mjs',
+  'scripts/run-render-verifier.mjs'
 ]
 const findings = required.filter(path => !existsSync(resolve(root, path))).map(path => `${path} is missing`)
 
@@ -35,6 +41,9 @@ if (manifest) {
   if (manifest.schemaVersion !== 1 || !['AS-1', 'AS-2', 'AS-3', 'AS-4'].includes(manifest.conformanceLevel)) {
     findings.push('source manifest has an unsupported schema or conformance level')
   }
+  if (!manifest.conformance?.target || !manifest.conformance?.status || !manifest.governance?.codeowners || !manifest.workflow?.profile || !manifest.project?.packageManager) {
+    findings.push('source manifest must declare conformance state, governance ownership, and workflow profile')
+  }
   if (!Array.isArray(manifest.skills) || manifest.skills.length === 0) findings.push('source manifest must declare its generated skill catalog')
   for (const path of manifest.documents || []) if (!existsSync(resolve(root, path))) findings.push(`manifest document ${path} is missing`)
   for (const skill of manifest.skills || []) {
@@ -46,16 +55,29 @@ if (manifest) {
   }
 }
 
-for (const path of ['template/.claude/hooks/dod.mjs', 'template/.agent-standard/scripts/doctor.mjs', 'template/.agent-standard/scripts/sbom.mjs', 'template/.agent-standard/scripts/sync-skills.mjs']) {
+for (const path of [
+  'bin/agent-standard.mjs',
+  'template/.agent-standard/scripts/bootstrap.mjs',
+  'template/.agent-standard/scripts/dod.mjs',
+  'template/.agent-standard/scripts/doctor.mjs',
+  'template/.agent-standard/scripts/merge-config.mjs',
+  'template/.agent-standard/scripts/sbom.mjs',
+  'template/.agent-standard/scripts/sync-skills.mjs',
+  'template/.agent-standard/scripts/verify.mjs',
+  'scripts/run-render-verifier.mjs'
+]) {
   const result = spawnSync(process.execPath, ['--check', resolve(root, path)], { encoding: 'utf8' })
   if (result.status !== 0) findings.push(`${path} has invalid JavaScript: ${(result.stderr || '').trim()}`)
 }
 
 const copier = readFileSync(resolve(root, 'copier.yml'), 'utf8')
-if (!copier.includes('--gitignore=false')) findings.push('Ruler must keep generated agent files trackable')
-if (!copier.includes('node .agent-standard/scripts/sbom.mjs --write')) findings.push('Copier must refresh the configured SBOM')
-if (!/@fission-ai\/openspec@\d+\.\d+\.\d+/.test(copier)) findings.push('OpenSpec bootstrap must use an exact version')
-if (!/@intellectronica\/ruler@\d+\.\d+\.\d+/.test(copier)) findings.push('Ruler bootstrap must use an exact version')
+const bootstrap = readFileSync(resolve(root, 'template/.agent-standard/scripts/bootstrap.mjs'), 'utf8')
+if (!copier.includes('_answers_file: .agent-standard/copier-answers.yml')) findings.push('Copier answers must be namespaced under .agent-standard')
+if (!bootstrap.includes('--gitignore=false')) findings.push('Ruler must keep generated agent files trackable')
+if (!bootstrap.includes('--no-skills')) findings.push('Ruler must not own client skill directories')
+if (!bootstrap.includes("'.agent-standard/scripts/sbom.mjs', '--write'")) findings.push('Bootstrap must refresh the configured SBOM')
+if (!/@fission-ai\/openspec@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('OpenSpec bootstrap must use an exact version')
+if (!/@intellectronica\/ruler@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('Ruler bootstrap must use an exact version')
 
 for (const path of [...filesBelow('.github'), ...filesBelow('template/.github')].filter(path => ['.yml', '.jinja'].includes(extname(path)))) {
   const workflow = readFileSync(resolve(root, path), 'utf8')

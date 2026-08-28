@@ -3,13 +3,30 @@
 # repo's own docs/ and examples/ stay behind.
 _subdirectory: template
 _min_copier_version: "9.0.0"
+_answers_file: .agent-standard/copier-answers.yml
 
 # ── what the developer is asked ──────────────────────────────────────────────
+
+setup_profile:
+  type: str
+  help: Standard uses the organisation defaults; advanced exposes every control
+  choices:
+    "Standard — recommended paved path": standard
+    "Advanced — choose each control": advanced
+  default: standard
 
 project_name:
   type: str
   help: Project name (used in generated files and docs)
   default: my-service
+  validator: >-
+    {% set state = namespace(invalid=false) %}
+    {% for character in project_name %}
+    {% if character not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.' %}{% set state.invalid = true %}{% endif %}
+    {% endfor %}
+    {% if not project_name | trim or state.invalid or project_name[0] not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' or (language_stack == 'py-fastapi' and ('.' in project_name or project_name[0] not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')) %}
+    Use letters, numbers, spaces, underscores, and hyphens; start with a letter (Python) or letter/number (TypeScript). Dots are supported only for TypeScript.
+    {% endif %}
 
 language_stack:
   type: str
@@ -20,6 +37,29 @@ language_stack:
     "Python — FastAPI REST API": py-fastapi
   default: ts-node
 
+mode:
+  type: str
+  help: Greenfield scaffolds a project skeleton; adopt safely integrates with an existing repository
+  choices:
+    "Greenfield — scaffold the project skeleton": greenfield
+    "Adopt — preserve existing project files and integrate the standard": adopt
+  default: greenfield
+
+codeowners:
+  type: str
+  help: GitHub user or team that owns standard and security paths (for example @acme/platform)
+  validator: >-
+    {% set state = namespace(invalid=false) %}
+    {% for character in codeowners %}
+    {% if character not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@/_.- ' %}{% set state.invalid = true %}{% endif %}
+    {% endfor %}
+    {% for owner in codeowners.split() %}
+    {% if not owner.startswith('@') or owner.count('@') != 1 %}{% set state.invalid = true %}{% endif %}
+    {% endfor %}
+    {% if not codeowners | trim or state.invalid %}
+    Enter one or more GitHub owners separated by spaces, for example @acme/platform @acme/security.
+    {% endif %}
+
 architecture:
   type: str
   help: Architecture style
@@ -27,6 +67,7 @@ architecture:
     "Service-based — services with explicit contracts": service-based
     "Clean / layered — domain-centric, dependency-inverted": clean-layered
   default: service-based
+  when: "{{ setup_profile == 'advanced' or mode == 'greenfield' }}"
 
 topology:
   type: str
@@ -36,14 +77,16 @@ topology:
     "Modular monolith - capability modules in one deployable": modular-monolith
     "Distributed services - independently deployable services": distributed-services
   default: modular-monolith
+  when: "{{ setup_profile == 'advanced' }}"
 
-mode:
+workflow_profile:
   type: str
-  help: Greenfield scaffolds a project skeleton; adopt wires the standard into an existing repo
+  help: Lightweight plans proportionally; spec-driven installs the full OpenSpec workflow
   choices:
-    "Greenfield — scaffold the project skeleton": greenfield
-    "Adopt — no skeleton, wire the standard into an existing repo": adopt
-  default: greenfield
+    "Lightweight — PR acceptance criteria plus change plans when risk warrants": lightweight
+    "Spec-driven — OpenSpec proposals, plans, tasks, validation, and archive": spec-driven
+  default: lightweight
+  when: "{{ setup_profile == 'advanced' }}"
 
 gate:
   type: str
@@ -52,6 +95,7 @@ gate:
     "Strict — block work until the gate passes": strict
     "Advisory — report only, never block": advisory
   default: strict
+  when: "{{ setup_profile == 'advanced' }}"
 
 agents:
   type: str
@@ -65,11 +109,14 @@ agents:
     - claude
     - codex
     - copilot
+  when: "{{ setup_profile == 'advanced' }}"
+  validator: "{% if not agents %}Select at least one agent client.{% endif %}"
 
 ci:
   type: bool
   help: Emit the required-check CI workflow (the hard enforcement boundary)?
   default: true
+  when: "{{ setup_profile == 'advanced' }}"
 
 bom_format:
   type: str
@@ -79,6 +126,7 @@ bom_format:
     "SPDX JSON": spdx-json
     "Both CycloneDX JSON and SPDX JSON": both
   default: cyclonedx-json
+  when: "{{ setup_profile == 'advanced' }}"
 
 bom_gate:
   type: str
@@ -87,6 +135,7 @@ bom_gate:
     "Strict - fail the quality gate": strict
     "Advisory - report without failing": advisory
   default: strict
+  when: "{{ setup_profile == 'advanced' }}"
 
 security_profile:
   type: str
@@ -95,11 +144,15 @@ security_profile:
     "Baseline - dependency updates and dependency review": baseline
     "Hardened - baseline plus CodeQL": hardened
   default: hardened
+  when: "{{ setup_profile == 'advanced' }}"
+  validator: "{% if security_profile == 'hardened' and not ci %}The hardened profile requires CI so CodeQL can run.{% endif %}"
 
 release_attestations:
   type: bool
   help: Emit an opt-in release workflow for signed build and SBOM attestations?
   default: false
+  when: "{{ setup_profile == 'advanced' }}"
+  validator: "{% if release_attestations and not ci %}Release attestations require CI.{% endif %}"
 
 # ── derived / non-asked ──────────────────────────────────────────────────────
 
@@ -110,13 +163,13 @@ pkg:
   default: "{{ project_name | lower | replace('-', '_') | replace(' ', '_') }}"
 
 _message_after_copy: |
-  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} · {{ architecture }} · {{ topology }}).
+  agent-standard is set up for "{{ project_name }}" ({{ language_stack }} / {{ architecture }} / {{ topology }} / {{ workflow_profile }}).
 
   Next:
   {% if mode == 'greenfield' %}  - install dependencies to create the lockfile
     - refresh the SBOM and run the verification command in README.md{% else %}  - map commands and globs to the adopted repository, then refresh the SBOM{% endif %}
     - review and commit every generated file, including agent instructions and skills
-    - pull future standard updates with:  copier update --trust
+    - pull future standard updates with:  copier update --trust --answers-file .agent-standard/copier-answers.yml
 
 # Files that must never be rendered by Copier because another tool owns them.
 # ruler generates CLAUDE.md and AGENTS.md from .ruler/*; rendering them here would
@@ -129,28 +182,35 @@ _exclude:
   - ".DS_Store"
   - "CLAUDE.md"
   - "AGENTS.md"
+  - "{% if 'claude' not in agents %}.claude/settings.json{% else %}.agent-standard/no-exclude/claude-settings.json{% endif %}"
+
+# Existing project-owned files are never overwritten during initial adoption.
+# merge-config.mjs adds only the managed hook and CODEOWNERS block.
+_skip_if_exists:
+  - "{% if mode == 'adopt' %}README.md{% else %}.agent-standard/no-skip/README.md{% endif %}"
+  - "{% if mode == 'adopt' %}SECURITY.md{% else %}.agent-standard/no-skip/SECURITY.md{% endif %}"
+  - "{% if mode == 'adopt' %}CONTRIBUTING.md{% else %}.agent-standard/no-skip/CONTRIBUTING.md{% endif %}"
+  - "{% if mode == 'adopt' %}.gitignore{% else %}.agent-standard/no-skip/gitignore{% endif %}"
+  - "{% if mode == 'adopt' %}.claude/settings.json{% else %}.agent-standard/no-skip/claude-settings.json{% endif %}"
+  - "{% if mode == 'adopt' %}.github/CODEOWNERS{% else %}.agent-standard/no-skip/CODEOWNERS{% endif %}"
+  - "{% if mode == 'adopt' %}.github/dependabot.yml{% else %}.agent-standard/no-skip/dependabot.yml{% endif %}"
+  - "{% if mode == 'adopt' %}.github/pull_request_template.md{% else %}.agent-standard/no-skip/pull-request-template.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/README.md{% else %}.agent-standard/no-skip/docs-README.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/decisions/README.md{% else %}.agent-standard/no-skip/decisions-README.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/decisions/0000-template.md{% else %}.agent-standard/no-skip/decision-template.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/runbooks/README.md{% else %}.agent-standard/no-skip/runbooks-README.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/testing.md{% else %}.agent-standard/no-skip/testing.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/topology.md{% else %}.agent-standard/no-skip/topology.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/changes/README.md{% else %}.agent-standard/no-skip/changes-README.md{% endif %}"
+  - "{% if mode == 'adopt' %}docs/changes/0000-template.md{% else %}.agent-standard/no-skip/change-template.md{% endif %}"
 
 # Bootstrap the adopted tools after rendering. Requires Node on the machine.
 # NOTE: Copier runs tasks only with `--trust` (they execute shell commands).
 _tasks:
-  # Copy-time bootstrap. Update-time regeneration is handled by post-migrations
-  # so it runs only after Copier has merged the new template into the real repo.
-  # OpenSpec: initialise once, then let `openspec update` handle upgrades.
-  # copilot -> github-copilot for OpenSpec's tool names.
-  - command: "npx --yes @fission-ai/openspec@1.11.0 init --tools {{ agents | map('replace', 'copilot', 'github-copilot') | join(',') }} --force --no-animation"
-    when: "{{ _copier_operation == 'copy' }}"
-  # ruler: regenerate the per-agent rulebooks every time (fresh from .ruler/).
-  - command: "npx --yes @intellectronica/ruler@0.3.44 apply --local-only --skills --no-backup --gitignore=false --agents agentsmd,{{ agents | join(',') }}"
-    when: "{{ _copier_operation == 'copy' }}"
-  - command: "node .agent-standard/scripts/sync-skills.mjs"
-    when: "{{ _copier_operation == 'copy' }}"
-  - command: "node .agent-standard/scripts/sbom.mjs --write"
+  - command: "node .agent-standard/scripts/bootstrap.mjs"
     when: "{{ _copier_operation == 'copy' }}"
 
 # Copier renders temporary old/new trees while calculating an update. Post-
 # migrations run once in the actual repository after that merge is complete.
 _migrations:
-  - command: "npx --yes @fission-ai/openspec@1.11.0 update"
-  - command: "npx --yes @intellectronica/ruler@0.3.44 apply --local-only --skills --no-backup --gitignore=false --agents agentsmd,{{ agents | join(',') }}"
-  - command: "node .agent-standard/scripts/sync-skills.mjs"
-  - command: "node .agent-standard/scripts/sbom.mjs --write"
+  - command: "node .agent-standard/scripts/bootstrap.mjs"

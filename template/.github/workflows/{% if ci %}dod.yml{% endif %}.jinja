@@ -2,7 +2,10 @@ name: agent-standard
 on:
   pull_request:
   push:
-    branches: [main]
+
+concurrency:
+  group: {% raw %}agent-standard-${{ github.workflow }}-${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,6 +14,7 @@ jobs:
   verify:
     name: definition-of-done
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -32,10 +36,12 @@ jobs:
       - run: uv sync --locked --all-groups
 {%- endif %}
       - name: Verify repository contract
+        run: node .agent-standard/scripts/verify.mjs
+      - name: Verify change policy
         env:
           DOD_BASE: {% raw %}${{ github.event.pull_request.base.sha || github.event.before }}{% endraw %}
           DOD_HEAD: {% raw %}${{ github.event.pull_request.head.sha || github.sha }}{% endraw %}
-        run: node .claude/hooks/dod.mjs --ci
+        run: node .agent-standard/scripts/dod.mjs --ci --policy-only
 {%- if bom_format in ['cyclonedx-json', 'both'] %}
       - name: Generate CycloneDX build SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0

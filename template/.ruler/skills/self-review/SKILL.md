@@ -5,6 +5,6 @@ description: Review a completed repository change before handoff for correctness
 
 # Self-review
 
-Review the actual diff against the request and OpenSpec acceptance criteria. Look first for correctness, data loss, boundary violations, unsafe defaults, missing negative tests, documentation drift, and stale generated files.
+Review the actual diff against the request and its recorded acceptance criteria or selected change plan. Look first for correctness, data loss, boundary violations, unsafe defaults, missing negative tests, documentation drift, and stale generated files.
 
 Run the manifest verification command. Report findings by severity with file evidence; fix in-scope issues when implementation was authorized. Do not claim success from green checks alone when behavior was not exercised.

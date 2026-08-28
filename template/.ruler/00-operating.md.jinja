@@ -9,19 +9,25 @@ standards** for this project. Follow all three. They are specific to
 **{{ language_stack }}**, **{{ architecture }}**, and **{{ topology }}** on purpose — do not apply generic habits
 from other stacks.
 
-## The loop — spec → plan → build → done
+## The loop — define → plan → build → verify
 
-1. **Spec** — capture every change with OpenSpec in `openspec/changes/`. State the *what*
-   and *why* before the *how*. Do not jump to code.
-2. **Plan & tasks** — break the spec into tasks; the plan is the contract for "done".
+1. **Define** — state the outcome and acceptance criteria before implementation.
+{% if workflow_profile == 'spec-driven' -%}
+2. **Plan** — use OpenSpec in `openspec/changes/` for non-trivial work and validate it.
+{% else -%}
+2. **Plan** — use `docs/changes/` when the work has multiple dependent steps,
+   architecture/security impact, migration risk, or a meaningful rollback requirement.
+   Small fixes can keep acceptance criteria in the pull request.
+{% endif -%}
 3. **Build** — implement against the plan, following the language + architecture standards.
-4. **Done** — the definition-of-done gate must pass.
+4. **Verify** — run the manifest verification command; CI is the hard boundary.
 
 ## Definition of done
 
-The gate (`.claude/hooks/dod.mjs`, and the CI check) blocks until:
+The gate (`.agent-standard/scripts/dod.mjs`, and the CI check) blocks until:
 
-- the OpenSpec change validates,
+{% if workflow_profile == 'spec-driven' -%}- any active OpenSpec change validates,
+{% endif -%}
 - production code changes ship with tests **in the right place and type** —
 {%- if language_stack == 'py-fastapi' %} unit `tests/unit/test_*.py`, integration `tests/integration/test_*.py`,
 {%- elif language_stack == 'ts-next' %} unit/component `__tests__/` or `*.test.tsx`, e2e `e2e/*.spec.ts`,
@@ -34,7 +40,9 @@ standards below, which the gate cannot check.
 
 ## Where things live
 
-- Specs / plans → `openspec/`
+{% if workflow_profile == 'spec-driven' -%}- Specs / plans → `openspec/`
+{% else -%}- Change plans → `docs/changes/`
+{% endif -%}
 - Architecture decisions (ADRs) → `docs/decisions/` (one Markdown ADR per decision)
 - Documentation routing → `docs/README.md`
 - Deployment topology → `docs/topology.md`

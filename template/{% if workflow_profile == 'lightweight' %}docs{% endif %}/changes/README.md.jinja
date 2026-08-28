@@ -1,0 +1,18 @@
+---
+id: CHANGE-INDEX
+type: index
+status: active
+owner: {{ codeowners | tojson }}
+scope: repository
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Change plans
+
+Use a change plan for work with multiple dependent steps, architecture or security
+impact, migration risk, or a meaningful rollback requirement. Small, low-risk fixes can
+state acceptance criteria directly in the pull request.
+
+Create plans from [the template](0000-template.md), name them after the outcome, and
+remove or archive completed plans according to repository policy.

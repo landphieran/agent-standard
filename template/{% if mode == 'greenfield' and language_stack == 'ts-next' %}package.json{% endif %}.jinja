@@ -4,6 +4,7 @@
   "description": "{{ project_name }}",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=22.13" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +14,7 @@
     "test:unit": "vitest run __tests__",
     "test:e2e": "playwright test",
     "verify:code": "npm run lint && npm run typecheck && npm test && npm run build",
-    "agent:verify": "node .agent-standard/scripts/doctor.mjs",
+    "agent:verify": "node .agent-standard/scripts/verify.mjs",
     "sbom": "node .agent-standard/scripts/sbom.mjs --write"
   },
   "dependencies": {
@@ -22,13 +23,16 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.3.3",
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
-    "eslint": "9.39.5",
-    "eslint-config-next": "16.3.3",
+    "eslint": "10.9.1",
+    "eslint-plugin-react-hooks": "7.1.1",
     "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
     "vitest": "4.1.11"
   }
 }

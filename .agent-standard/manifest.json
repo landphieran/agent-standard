@@ -3,15 +3,24 @@
   "schemaVersion": 1,
   "standardVersion": "0.6.0-dev",
   "conformanceLevel": "AS-3",
+  "conformance": {
+    "target": "AS-3",
+    "status": "adopting",
+    "localEnforcement": "strict",
+    "remoteEnforcement": "unverified"
+  },
   "project": {
     "name": "agent-standard",
     "packageName": "agent-standard",
     "stack": "ts-node",
+    "packageManager": "npm",
     "architecture": "service-based",
     "topology": "single-deployable",
     "mode": "adopt"
   },
+  "governance": { "codeowners": "@landphieran" },
   "agents": ["codex", "claude", "copilot"],
+  "workflow": { "profile": "lightweight", "engine": "native" },
   "commands": {
     "install": "npm install",
     "verify": "npm test",

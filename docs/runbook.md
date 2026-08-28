@@ -3,71 +3,100 @@
 ## Prerequisites
 
 - Git 2.27+
-- Node 22+
-- `uv` with ephemeral `uvx copier`, or Copier 9+
+- Node 22.13+
+- `uv`/`uvx`
+- a clean Git worktree for an existing repository
+- a real GitHub user or team for protected paths
 
-Copier tasks execute pinned OpenSpec and Ruler commands, so copy/update requires `--trust`.
+Bootstrap executes version-pinned Ruler and, for the spec-driven profile, OpenSpec. Copier therefore runs with `--trust` inside an isolated staging worktree.
 
-## Greenfield repository
+## Recommended installer
+
+Greenfield:
 
 ```bash
-uvx copier copy --trust gh:landphieran/agent-standard ./my-service
-cd ./my-service
+npx --yes --package=github:landphieran/agent-standard agent-standard init ./my-service --owner '@acme/platform'
 ```
 
-Install before committing so CI's locked install has a lockfile:
+Existing repository:
+
+```bash
+cd ./existing-repository
+npx --yes --package=github:landphieran/agent-standard agent-standard init . --owner '@acme/platform'
+```
+
+Ownership is always explicit because a GitHub organization name alone is not a valid substitute for the team responsible for protected paths. The installer:
+
+1. requires the repository root, a clean worktree, and an existing commit;
+2. detects the supported stack and package manager;
+3. renders and bootstraps in a detached temporary worktree;
+4. prints the exact file plan;
+5. copies the verified delta with rollback backups if application fails.
+
+`--dry-run` performs the staging and verification but leaves the destination unchanged. The current minimum toolchains are npm and uv. An unsupported package-manager lockfile fails before rendering because the corresponding locked install and SBOM parser are not yet standardized.
+
+## Initial verification
+
+Install dependencies, refresh the committed SBOM, and run the single repository contract:
 
 ```bash
 # TypeScript
 npm install
 npm run sbom
-npm run agent:verify
+node .agent-standard/scripts/verify.mjs
 
 # Python
 uv sync
 node .agent-standard/scripts/sbom.mjs --write
-node .agent-standard/scripts/doctor.mjs
+node .agent-standard/scripts/verify.mjs
 ```
 
-Then initialize Git and commit all generated files, including `AGENTS.md`, `CLAUDE.md`, client skill copies, the dependency lockfile, and the selected BOM file(s).
+In adoption mode, first map `.agent-standard/gate.json` commands and globs to the repository’s real lint, type, build, unit, and integration checks. Commit the lockfile, selected SBOM files, generated rulebooks, and client skills together.
 
-## Existing repository
+## What adoption preserves
 
-Commit or stash current work, then render an adoption configuration into the repository:
+Initial adoption does not overwrite an existing `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `.gitignore`, governed documentation file or template, Dependabot file, pull-request template, Claude settings, CODEOWNERS, or another Copier template's root answers file. The bootstrap adds one idempotent Claude Stop hook, one delimited CODEOWNERS block, and one delimited pull-request checklist while preserving unrelated configuration.
+
+The standard’s documentation entry point is `docs/agent-standard.md`, so teams can link it from their existing index on their own terms.
+
+## Advanced and direct Copier use
+
+Use `--workflow spec-driven` to install OpenSpec. Use `--advanced` to answer all controls interactively. For automation or an answer file, Copier remains the lower-level interface; specify `HEAD` explicitly while the project is pre-release:
 
 ```bash
-uvx copier copy --trust --data-file path/to/adopt-answers.yml gh:landphieran/agent-standard .
+uvx copier copy --trust --vcs-ref HEAD \
+  --answers-file .agent-standard/copier-answers.yml \
+  --data-file path/to/answers.yml \
+  gh:landphieran/agent-standard .
 ```
 
-Start with advisory gates. Map `.agent-standard/gate.json` commands and globs to the repository's real test/lint/build entry points. Merge an existing `.claude/settings.json` carefully. Add the generated documentation routes to existing indexes, refresh the SBOM from the installed lockfile, run the doctor, and commit all adopted artifacts.
+Direct Copier adoption still preserves the protected files, but only the recommended installer provides destination-level transaction and rollback behavior.
 
-Move to strict only after the baseline is green and the CI jobs are required by a ruleset.
+## Test policy behavior
 
-## Verify failure behavior once
-
-Change a source file without a test and run:
+To inspect the local Definition-of-Done policy after changing a source file:
 
 ```bash
-echo '{}' | node .claude/hooks/dod.mjs
+echo '{}' | node .agent-standard/scripts/dod.mjs
 ```
 
-Strict mode returns a Claude block decision. Add a recognised test and rerun. For a legitimate exception, add an owned, reasoned, expiring path waiver and have it reviewed.
+Strict mode returns a Claude block decision or a non-zero CI result. Advisory mode reports the same finding without blocking. A legitimate exception must be an owned, reasoned, expiring path waiver in `.agent-standard/waivers.json`.
 
 ## Update
 
 ```bash
-copier update --trust
+copier update --trust --answers-file .agent-standard/copier-answers.yml
 ```
 
 After the three-way merge:
 
-1. Review Copier conflicts and manifest changes.
-2. Reinstall if dependency manifests changed.
-3. Run the manifest `updateBom` command.
-4. Run the manifest `verify` command.
-5. Confirm Ruler outputs and propagated skills are tracked.
-6. Review the entire generated diff and commit it as one standard update.
+1. review conflicts and manifest changes;
+2. reinstall if dependency manifests changed;
+3. run the manifest `updateBom` command;
+4. run the manifest `verify` command;
+5. confirm generated instructions and skills are tracked;
+6. review and commit the complete standard update together.
 
 ## GitHub enforcement
 
-After the first pushed workflows pass, create a branch ruleset that requires `definition-of-done`, `dependency-review`, and—under the hardened profile—CodeQL. Require pull requests, stale-review dismissal, conversation resolution, linear history if desired, and code-owner review for standard/security paths. See [github-hardening.md](github-hardening.md); repository settings are intentionally not mutated by Copier.
+Generated workflows provide checks but do not make themselves mandatory. After the first push is green, an authorized administrator must apply the branch ruleset and security settings described in [github-hardening.md](github-hardening.md). Until that external state is audited, the manifest remains `pending-remote` or `adopting`; local success alone is not a conformance claim.

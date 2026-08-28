@@ -1,0 +1,31 @@
+---
+id: AGENT-STANDARD
+type: standard
+status: active
+owner: {{ codeowners | tojson }}
+scope: repository
+last_verified: 2026-08-28
+verified_against: agent-standard-0.6.0-dev
+---
+
+# Agent development standard
+
+This repository adopts agent-standard without replacing its existing documentation.
+The machine-readable contract is `.agent-standard/manifest.json`; repository-wide agent
+instructions are in `AGENTS.md`.
+
+Run the manifest `commands.verify` command before opening a pull request. Keep the
+dependency lockfile and configured SBOM current together. Use an owned, reasoned,
+expiring entry in `.agent-standard/waivers.json` only when the ordinary test policy
+cannot apply.
+
+The standard targets AS-3. Its manifest reports local and remote enforcement
+separately; generated GitHub jobs become hard gates only after an administrator requires
+them in a repository ruleset.
+
+{% if workflow_profile == 'spec-driven' -%}
+Non-trivial changes use the OpenSpec workflow under `openspec/`.
+{% else -%}
+Record acceptance criteria in the pull request. For a non-trivial or high-risk change,
+create a change plan from `docs/changes/0000-template.md`.
+{% endif -%}

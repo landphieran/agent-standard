@@ -1,6 +1,6 @@
 # Contributing
 
-1. Start a change in `openspec/changes/` and define acceptance criteria.
+1. Define acceptance criteria.{% if workflow_profile == 'spec-driven' %} Start non-trivial work in `openspec/changes/`.{% else %} Use `docs/changes/` when risk or complexity warrants a durable plan.{% endif %}
 2. Read `AGENTS.md`, [the documentation index](docs/README.md), and the architecture contract relevant to the change.
 3. Keep implementation, tests, documentation, decisions, and the SBOM in the same pull request when they change together.
 4. Run the manifest command `commands.verify` from `.agent-standard/manifest.json`.

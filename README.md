@@ -1,62 +1,66 @@
 # agent-standard
 
-A configurable, testable repository standard for AI-agent-assisted development. Copier renders the project contract; OpenSpec structures changes; Ruler distributes one rulebook and skill pack across agent clients; deterministic scripts and GitHub Actions enforce everything machines can prove.
+A minimum viable, secure repository baseline for AI-agent-assisted development. It gives teams the same agent workflow, documentation lifecycle, quality checks, and supply-chain controls without requiring every repository to invent them again.
+
+The default path is intentionally small: the installer detects an existing project, stages and verifies the change away from the working repository, preserves project-owned files, and applies the result only after bootstrap succeeds. Teams can opt into the full configuration surface when they need it.
 
 ## What a repository receives
 
-| Control | Generated implementation |
+| Concern | Baseline implementation |
 |---|---|
-| Agent execution | Tracked `AGENTS.md`/`CLAUDE.md` plus portable workflow skills generated from `.ruler/` |
-| Change workflow | OpenSpec proposal, plan, task, validation, and archive flow |
-| Project contract | `.agent-standard/manifest.json` and JSON Schema |
-| Documentation maintenance | Indexed docs, metadata, ADR template, runbook index, and link/conformance checks |
-| Quality | One Definition of Done verdict locally and in CI; structured expiring waivers |
-| Architecture | Stack-specific rules and scaffold, with internal architecture separate from deployment topology |
-| Supply chain | Committed CycloneDX JSON, SPDX JSON, or both; lockfile-aware freshness checks and CI build SBOMs |
-| Security | SHA-pinned Actions, least-privilege permissions, Dependabot, dependency review, optional CodeQL, optional release attestations |
+| Agent execution | Tracked `AGENTS.md`/`CLAUDE.md` and portable skills generated from one `.ruler/` source |
+| Change workflow | Lightweight acceptance criteria and proportional change plans by default; OpenSpec as an opt-in spec-driven profile |
+| Project contract | `.agent-standard/manifest.json` plus schema, explicit ownership, workflow, package manager, and conformance state |
+| Documentation | Governed indexes, freshness metadata, ADR and runbook conventions, and deterministic link/metadata checks |
+| Quality | One full verification command, a source-change/test policy, structured expiring waivers, and matching CI behavior |
+| Supply chain | Committed CycloneDX JSON, SPDX JSON, or both, with strict or advisory freshness gates |
+| Security | SHA-pinned Actions, least-privilege permissions, Dependabot, dependency review, hardened CodeQL, and optional release attestations |
 
-## Configuration surface
+## Recommended setup
 
-- Stacks: TypeScript Node, TypeScript Next.js, Python FastAPI
-- Architecture: capability/service-based or clean/layered
-- Topology: single deployable, modular monolith, or distributed services
-- Mode: greenfield scaffold or adoption into an existing repository
-- Enforcement: strict or advisory Definition of Done; strict or advisory BOM gate
-- BOM: CycloneDX JSON, SPDX JSON, or both
-- Agents: Claude, Codex, Copilot
-- Security: baseline or hardened; optional release attestations
-
-## Quick start
-
-Prerequisites are Git, Node 22+, and Copier through `uvx` or an installed Python tool.
+Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for isolated Copier execution. The project is pre-release, so the installer intentionally uses repository `HEAD` unless `--ref` is supplied.
 
 ```bash
-uvx copier copy --trust gh:landphieran/agent-standard ./my-service
+npx --yes --package=github:landphieran/agent-standard agent-standard init ./my-service --owner '@acme/platform'
 ```
 
-Install dependencies before the first commit so the lockfile and generated SBOM are included. Follow [the runbook](docs/runbook.md) for greenfield and adoption paths.
+For an existing repository, commit or stash current work and run the same command at its root. The installer infers its name, stack, and adoption mode; security ownership remains an explicit choice:
+
+```bash
+npx --yes --package=github:landphieran/agent-standard agent-standard init . --owner '@acme/platform'
+```
+
+Use `--dry-run` to inspect the verified file plan, `--architecture clean-layered` to change the application layout, `--workflow spec-driven` for OpenSpec, or `--advanced` to answer every remaining control question. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable error instead of silently weakening SBOM accuracy.
+
+See [the adoption runbook](docs/runbook.md) for the full procedure and the lower-level Copier escape hatch.
+
+## Standard profile
+
+The paved path defaults to a lightweight planning workflow, strict local and CI gates, all supported agent clients, a strict CycloneDX SBOM, hardened security automation, and no release workflow. Greenfield users also choose an architecture; adoption preserves existing application and documentation files.
+
+The advanced profile exposes architecture, topology, workflow, enforcement, client, CI, SBOM, security, and attestation controls. Answers are namespaced under `.agent-standard/` for deterministic updates without colliding with another Copier template.
 
 ## Maintainer verification
 
 ```bash
 npm install
 npm test
-pwsh -NoProfile -File scripts/verify-render.ps1
+npm run verify:renders
 ```
 
-The render matrix exercises all four examples through Copier tasks, tracked Ruler outputs, skill propagation, dependency installation, BOM refresh, doctor checks, and stack-native verification.
+The render matrix exercises the paved path plus four advanced configurations, including a realistic existing FastAPI repository. It verifies collision preservation, merged Claude settings and CODEOWNERS, client skill discovery, OpenSpec ordering, dependency installation, both SBOM formats, stack-native checks, and an idempotent Copier update.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
+- [Architecture and ownership](docs/architecture.md)
 - [Configuration reference](docs/configuration.md)
 - [Adoption and update runbook](docs/runbook.md)
-- [Conformance levels and controls](docs/conformance.md)
+- [Conformance levels and states](docs/conformance.md)
 - [Supply-chain standard](docs/supply-chain.md)
-- [GitHub enforcement and hardening](docs/github-hardening.md)
+- [GitHub enforcement](docs/github-hardening.md)
 - [Further standardization roadmap](docs/roadmap.md)
 - [Rendered examples](examples/README.md)
 
 ## Status
 
-Pre-release. The current source identifies itself as `0.6.0-dev`; no release or compatibility promise exists yet. Changes can land as one coherent batch, but the render/update contract is tested before every merge.
+Pre-release. The current source identifies itself as `0.6.0-dev`; no compatibility promise or release has been published. Repository settings are outside the generator boundary and remain explicitly unverified until an authorized administrator applies and audits them.

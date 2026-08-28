@@ -1,13 +1,16 @@
 # Example 2 — full-power greenfield TypeScript Node service.
 # Blocking gate, all three agents, required CI, service-based skeleton with contracts.
 #
-#   copier copy --trust --data-file examples/2-ts-node-service-strict.yml \
+#   copier copy --trust --vcs-ref HEAD --data-file examples/2-ts-node-service-strict.yml \
 #     gh:landphieran/agent-standard ./orders-service
+setup_profile: advanced
 project_name: orders-service
 language_stack: ts-node
+codeowners: "@example/orders"
 architecture: service-based
 topology: modular-monolith
 mode: greenfield
+workflow_profile: spec-driven
 gate: strict
 agents:
   - claude

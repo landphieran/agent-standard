@@ -1,0 +1,12 @@
+# Example 0 — minimum paved path for a greenfield TypeScript service.
+# Only the standard-profile questions are answered; every hidden control uses the
+# hardened default. This is the primary onboarding regression fixture.
+#
+#   copier copy --trust --vcs-ref HEAD --data-file examples/0-ts-node-standard.yml \
+#     gh:landphieran/agent-standard ./catalog-service
+setup_profile: standard
+project_name: catalog-service
+language_stack: ts-node
+mode: greenfield
+codeowners: "@example/catalog"
+architecture: service-based

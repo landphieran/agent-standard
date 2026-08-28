@@ -21,6 +21,6 @@ This repository is the source of a Copier-based conformance standard. Changes mu
 
 ## Verification
 
-Run `npm test` for gate and source checks. Before handoff, render all example configurations with `pwsh scripts/verify-render.ps1` or rely on the same matrix in CI.
+Run `npm test` for gate and source checks. Before handoff, render all example configurations with `npm run verify:renders` or rely on the same matrix in CI.
 
 Commit one coherent implementation batch unless the user requests a different history.

@@ -2,13 +2,16 @@
 # Blocking gate showcasing unit-vs-integration test SEPARATION (tests/unit vs
 # tests/integration), Claude + Codex, required CI.
 #
-#   copier copy --trust --data-file examples/4-py-fastapi-clean-strict.yml \
+#   copier copy --trust --vcs-ref HEAD --data-file examples/4-py-fastapi-clean-strict.yml \
 #     gh:landphieran/agent-standard ./ledger-api
+setup_profile: advanced
 project_name: ledger-api
 language_stack: py-fastapi
+codeowners: "@example/ledger"
 architecture: clean-layered
 topology: distributed-services
 mode: greenfield
+workflow_profile: spec-driven
 gate: strict
 agents:
   - claude

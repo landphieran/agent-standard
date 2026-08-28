@@ -1,27 +1,41 @@
 # Conformance model
 
-The levels are cumulative and provide a portable target for future policy-as-code or build-profile integration.
+Conformance has two dimensions: a target level and a current state. This prevents a locally generated repository from claiming that remote GitHub policy is enforced when nobody has verified the repository settings.
+
+## Levels
 
 | Level | Required outcomes |
 |---|---|
 | AS-1 — Agent instructions | Canonical tracked rules, generated client entry points, declared clients |
-| AS-2 — Workflow and docs | AS-1 plus manifest/schema, planning workflow, governed docs, portable skills, deterministic doctor, quality CI |
-| AS-3 — Secure development | AS-2 plus lockfile/BOM enforcement, SHA-pinned workflows, dependency automation/review, security policy, structured waivers |
-| AS-4 — Provenance | AS-3 plus releasable artifact definition, signed build/SBOM attestations, verification instructions, and protected release environment |
+| AS-2 — Workflow and docs | AS-1 plus manifest/schema, proportional planning workflow, governed docs, portable skills, deterministic doctor, and quality CI |
+| AS-3 — Secure development | AS-2 plus locked dependency workflow, committed BOM gate, immutable workflow references, dependency automation/review, security policy, and structured waivers |
+| AS-4 — Provenance | AS-3 plus a defined release subject, signed build/SBOM attestations, consumer verification, and protected release environment |
 
-The template defaults to AS-3. Enabling `release_attestations` emits necessary workflow mechanics but a project should claim AS-4 only after consumers verify attestations and the release subject is well-defined.
+The template targets AS-3. Generating an attestation workflow is necessary but not sufficient for AS-4.
+
+## States
+
+| State | Meaning |
+|---|---|
+| `adopting` | Local integration or advisory controls are still being mapped and remediated |
+| `pending-remote` | Local strict controls pass, but required GitHub rules/settings are unverified |
+| `conformant` | Local controls and authorized remote enforcement have both been audited |
+| `drifted` | Previously accepted evidence no longer matches repository or remote state |
+
+The doctor reports target, state, local enforcement, and remote enforcement separately. It never promotes a repository automatically and never equates a green local run with AS-3 conformance.
 
 ## Initial control identifiers
 
 | ID | Control | Automated evidence |
 |---|---|---|
-| AS-AGENT-001 | Agent instructions are generated from one canonical source and tracked | Doctor file/tracking checks |
-| AS-SKILL-001 | Declared workflow skills have valid frontmatter and propagated copies | Doctor plus Ruler render matrix |
-| AS-DOC-001 | Required docs and indexes exist with valid local links | Doctor |
-| AS-QUAL-001 | Source changes include tests or a structured waiver | DoD gate |
-| AS-QUAL-002 | Stack-native lint, type, test, and build checks pass | CI gate command |
-| AS-SUPPLY-001 | Selected CycloneDX/SPDX BOM is valid and current with dependency identities | SBOM checker |
+| AS-AGENT-001 | Agent instructions come from one canonical source and are tracked | Doctor file/tracking checks |
+| AS-SKILL-001 | Declared workflow skills have valid frontmatter and supported client copies | Doctor plus client-path tests |
+| AS-DOC-001 | Governed docs exist with ownership/freshness metadata and valid local links | Doctor |
+| AS-QUAL-001 | Source changes include tests or a structured waiver | DoD policy |
+| AS-QUAL-002 | Stack-native lint, type, test, and build checks pass | Full verification command |
+| AS-SUPPLY-001 | Selected CycloneDX/SPDX BOM is valid and current with locked dependency identities | SBOM checker |
 | AS-SUPPLY-002 | Workflow actions are immutable and dependency changes are reviewed | Source checks and GitHub workflows |
-| AS-PROV-001 | Released subject carries signed build/SBOM provenance | Optional tag workflow plus consumer verification |
+| AS-REMOTE-001 | Pull requests, required jobs, code-owner review, and security features are enforced | Future authorized remote audit |
+| AS-PROV-001 | A released subject carries verifiable build/SBOM provenance | Optional release profile plus consumer verification |
 
-The next schema revision should make these controls first-class manifest entries and emit JSON/SARIF evidence for organization dashboards.
+The next evidence revision should make control results first-class machine-readable records and map them to organization policy frameworks without expanding the minimum repository footprint.

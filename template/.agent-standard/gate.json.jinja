@@ -18,9 +18,9 @@
   "sourceGlobs": ["src/**/*.py", "app/**/*.py"],
   "unitTestGlobs": ["tests/unit/**/*.py"],
   "integrationTestGlobs": ["tests/integration/**/*.py"],
-  "unitCommand": "uv run pytest tests/unit -q",
-  "fullCommand": "uv run ruff format --check . && uv run ruff check . && uv run mypy src && uv run pytest -q",
+  "unitCommand": "uv run python -m pytest tests/unit -q",
+  "fullCommand": "uv run ruff format --check . && uv run ruff check . && uv run python -m mypy src && uv run python -m pytest -q",
 {%- endif %}
-  "openspec": true,
+  "openspec": {{ (workflow_profile == 'spec-driven') | lower }},
   "openspecValidateCommand": "npx --yes @fission-ai/openspec@1.11.0 validate --strict"
 }

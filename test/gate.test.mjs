@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const GATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'template', '.claude', 'hooks', 'dod.mjs')
+const GATE = join(dirname(fileURLToPath(import.meta.url)), '..', 'template', '.agent-standard', 'scripts', 'dod.mjs')
 
 const GATE_CFG = {
   mode: 'strict',
@@ -40,8 +40,8 @@ function runHook (dir, stdin = '{}') {
   return { code: r.status ?? 0, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
 /** Run the gate in CI mode over base..head. Returns {code, stdout, stderr}. */
-function runCI (dir, base) {
-  const r = spawnSync('node', [GATE, '--ci', '--base', base, '--head', 'HEAD'],
+function runCI (dir, base, extra = []) {
+  const r = spawnSync('node', [GATE, '--ci', '--base', base, '--head', 'HEAD', ...extra],
     { cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir } })
   return { code: r.status ?? 0, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
 }
@@ -177,5 +177,20 @@ test('CI refs are passed to git as arguments, not executed by a shell', () => {
   spawnSync('node', [GATE, '--ci', '--base', `HEAD;echo injected>${marker}`, '--head', 'HEAD'],
     { cwd: d, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: d } })
   assert.equal(existsSync(marker), false)
+  cleanup(d)
+})
+
+test('CI policy-only mode does not execute the full command twice', () => {
+  const d = makeRepo({
+    ...GATE_CFG,
+    fullCommand: 'node -e "require(\'fs\').writeFileSync(\'full-command-ran.txt\', \'yes\')"'
+  })
+  const git = a => execFileSync('git', a, { cwd: d, stdio: 'ignore' })
+  const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  write(d, 'src/foo.ts'); write(d, 'src/foo.test.ts', 'test\n')
+  git(['add', '-A']); git(['commit', '-qm', 'source + test'])
+  const r = runCI(d, base, ['--policy-only'])
+  assert.equal(r.code, 0)
+  assert.equal(existsSync(join(d, 'full-command-ran.txt')), false)
   cleanup(d)
 })

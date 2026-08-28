@@ -13,7 +13,7 @@ function fixture (mode = 'strict') {
   mkdirSync(join(root, '.agent-standard'))
   writeFileSync(join(root, '.agent-standard', 'manifest.json'), JSON.stringify({
     standardVersion: 'test',
-    project: { name: 'fixture', packageName: 'fixture' },
+    project: { name: 'fixture', packageName: 'fixture', packageManager: 'npm' },
     supplyChain: { bom: { mode, formats: ['cyclonedx-json', 'spdx-json'], files: ['bom.cdx.json', 'bom.spdx.json'] } }
   }))
   writeFileSync(join(root, 'package-lock.json'), JSON.stringify({
@@ -40,12 +40,28 @@ test('writes and verifies both supported SBOM formats from package-lock identiti
   assert.equal(run(root, '--write').status, 0)
   const cdx = JSON.parse(readFileSync(join(root, 'bom.cdx.json'), 'utf8'))
   const spdx = JSON.parse(readFileSync(join(root, 'bom.spdx.json'), 'utf8'))
+  assert.match(cdx.serialNumber, /^urn:uuid:/)
+  assert.match(spdx.documentNamespace, /^https:\/\/spdx\.org\/spdxdocs\//)
   assert.deepEqual(cdx.components.map(value => value.name), ['@scope/beta', 'alpha'])
   assert.deepEqual(spdx.packages.map(value => value.name), ['@scope/beta', 'alpha'])
   assert.equal(run(root, '--check').status, 0)
   const beforeUpdate = readFileSync(join(root, 'bom.cdx.json'), 'utf8')
   assert.equal(run(root, '--write').status, 0)
   assert.equal(readFileSync(join(root, 'bom.cdx.json'), 'utf8'), beforeUpdate)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('strict mode rejects structurally incomplete package entries', () => {
+  const root = fixture()
+  run(root, '--write')
+  const spdxPath = join(root, 'bom.spdx.json')
+  const spdx = JSON.parse(readFileSync(spdxPath, 'utf8'))
+  delete spdx.packages[0].downloadLocation
+  writeFileSync(spdxPath, JSON.stringify(spdx))
+
+  const result = run(root, '--check')
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /SPDX packages must contain/)
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -68,5 +84,29 @@ test('advisory mode reports stale BOMs without blocking', () => {
   const result = run(root, '--check')
   assert.equal(result.status, 0)
   assert.match(result.stderr, /advisory/)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('uv projects use uv.lock even when an incidental package.json exists', () => {
+  const root = fixture()
+  const manifestPath = join(root, '.agent-standard', 'manifest.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  manifest.project.packageManager = 'uv'
+  writeFileSync(manifestPath, JSON.stringify(manifest))
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { incidental: '9.0.0' } }))
+  writeFileSync(join(root, 'uv.lock'), [
+    'version = 1',
+    '[[package]]',
+    'name = "fixture"',
+    'version = "1.0.0"',
+    '[[package]]',
+    'name = "fastapi"',
+    'version = "1.2.3"',
+    ''
+  ].join('\n'))
+
+  assert.equal(run(root, '--write').status, 0)
+  const cdx = JSON.parse(readFileSync(join(root, 'bom.cdx.json'), 'utf8'))
+  assert.deepEqual(cdx.components.map(value => value.name), ['fastapi'])
   rmSync(root, { recursive: true, force: true })
 })

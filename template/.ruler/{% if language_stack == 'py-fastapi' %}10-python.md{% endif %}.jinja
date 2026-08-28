@@ -50,7 +50,7 @@ unless the existing code already encodes a deliberate, conflicting choice.
 
 ## Tooling & structure
 
-- `uv` for env + deps (`uv add`, `uv run`, commit `uv.lock`). **Ruff** as the single lint+format tool (replaces Black/isort/flake8). Type-check with `mypy --strict` (or strict `pyright`) in CI. All tool config in `pyproject.toml`.
+- `uv` for env + deps (`uv add`, `uv run`, commit `uv.lock`). **Ruff** as the single lint+format tool (replaces Black/isort/flake8). Type-check with `uv run python -m mypy` (or strict `pyright`) in CI. All tool config in `pyproject.toml`.
 - `src/` layout; absolute imports; minimal `__init__.py`. Break circular imports by refactoring or `if TYPE_CHECKING:`, not deferred function-level imports.
 
 ## Security

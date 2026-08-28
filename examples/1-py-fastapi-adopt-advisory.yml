@@ -2,13 +2,16 @@
 # No skeleton is written; the gate reports (advisory) rather than blocks; rulebook
 # goes to Claude only. Use this to try the standard on a repo without disruption.
 #
-#   copier copy --trust --data-file examples/1-py-fastapi-adopt-advisory.yml \
+#   copier copy --trust --vcs-ref HEAD --data-file examples/1-py-fastapi-adopt-advisory.yml \
 #     gh:landphieran/agent-standard ./existing-repo
+setup_profile: advanced
 project_name: payments-api
 language_stack: py-fastapi
+codeowners: "@example/payments"
 architecture: service-based
 topology: modular-monolith
 mode: adopt
+workflow_profile: lightweight
 gate: advisory
 agents:
   - claude

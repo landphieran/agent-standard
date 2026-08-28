@@ -2,13 +2,14 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const root = process.env.AGENT_STANDARD_ROOT || process.cwd()
+const root = resolve(process.env.AGENT_STANDARD_ROOT || process.cwd())
 const manifest = JSON.parse(readFileSync(resolve(root, '.agent-standard/manifest.json'), 'utf8'))
 const source = resolve(root, '.ruler/skills')
 const targets = new Set()
 
-if (manifest.agents.includes('claude') || manifest.agents.includes('copilot')) targets.add('.claude/skills')
+if (manifest.agents.includes('claude')) targets.add('.claude/skills')
 if (manifest.agents.includes('codex')) targets.add('.agents/skills')
+if (manifest.agents.includes('copilot')) targets.add('.github/skills')
 
 if (existsSync(source)) {
   for (const target of targets) {

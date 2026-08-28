@@ -2,23 +2,28 @@
 
 ## Format policy
 
-CycloneDX JSON and SPDX JSON are both conformant. CycloneDX is the default because it is expressive for application components, services, vulnerabilities/VEX, and build formulation. SPDX remains a first-class choice for ecosystems and procurement flows centered on license and package exchange. `both` is available when downstream consumers genuinely require both; it is not the default because two equivalent artifacts double maintenance and reconciliation.
+CycloneDX JSON and SPDX JSON are equally conformant choices. CycloneDX is the default because its model is well suited to application components, services, vulnerabilities/VEX, and build formulation. SPDX remains first-class for ecosystems and procurement flows centered on license and package exchange. `both` is available when a real downstream consumer needs both formats.
 
-The repository BOM is committed as `bom.cdx.json`, `bom.spdx.json`, or both. The deterministic checker validates the selected structure and compares package identities with `package-lock.json`, `package.json`, `uv.lock`, or `pyproject.toml`. Volatile timestamp fields are ignored. CI separately generates a fresh Syft build SBOM artifact in the selected format.
+The selected artifact is committed as `bom.cdx.json`, `bom.spdx.json`, or both. The deterministic checker validates structure and compares package identities with `package-lock.json` or `uv.lock`, falling back to dependency declarations only before the initial lockfile exists. CI separately generates a fresh Syft build SBOM artifact.
 
-This follows the formats supported by the [Anchore SBOM action](https://github.com/anchore/sbom-action), the [CycloneDX npm tooling](https://github.com/CycloneDX/cyclonedx-node-npm), and the [SPDX specification](https://github.com/spdx/spdx-spec).
+The manifest records the format, gate mode, files, and package manager. The minimum standard supports npm and uv end to end. Other package managers must add locked-install commands, dependency parsing, CI caching, and regression renders before becoming accepted options.
 
 ## Gate policy
 
-- Strict: missing file, wrong format, malformed structure, or dependency identity drift fails CI.
-- Advisory: the same conditions are visible but non-blocking during staged adoption.
-- Dependency changes refresh the lockfile and BOM in the same pull request.
-- CI build SBOMs are artifacts, not substitutes for the reviewable committed BOM.
+- Strict: a missing file, wrong format, malformed structure, or dependency identity drift fails verification.
+- Advisory: the same condition is visible but non-blocking during staged adoption.
+- Dependency changes update the lockfile and committed BOM in the same pull request.
+- Build SBOM artifacts complement but do not replace the reviewable committed BOM.
+- CycloneDX and SPDX are normalized to the same package-identity comparison, so format choice does not change gate strength.
+
+## Relationship to GitHub dependency controls
+
+The committed BOM answers “what this repository resolved”; dependency review evaluates pull-request changes; Dependabot supplies update automation; CodeQL inspects code paths. None substitutes for the others, and none becomes a merge gate until an administrator requires the corresponding job.
 
 ## Provenance
 
-Tag-triggered attestations are opt-in. GitHub's attestation action accepts CycloneDX or SPDX SBOM predicates, but signing provides value only if a concrete release artifact is identified and consumers verify it. The long-term target is SLSA provenance with isolated reusable release workflows and protected release environments.
+Tag-triggered attestations are opt-in. Signing is meaningful only after the repository defines the build subject and consumers verify it. The long-term target is isolated reusable release workflows, protected environments, and deployment-time provenance verification.
 
-## Beyond the basic implementation
+## Next supply-chain profiles
 
-High-value next controls are container/image SBOMs after final packaging, vulnerability/VEX policy with an owned SLA, license allow/deny policy, provenance verification at deployment, and an organization-level dependency inventory such as GUAC. These should be profiles over the same manifest rather than per-repository scripts.
+High-value extensions are container/image SBOMs after final packaging, vulnerability and VEX policy with an owned SLA, license policy, cryptographic BOMs for relevant products, provenance verification at deployment, and an organization dependency inventory. These should remain profiles over the same manifest rather than bespoke repository scripts.

@@ -1,17 +1,14 @@
 #!/usr/bin/env node
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
-const root = process.env.AGENT_STANDARD_ROOT || process.cwd()
+const root = resolve(process.env.AGENT_STANDARD_ROOT || process.cwd())
 const args = new Set(process.argv.slice(2))
 const manifestPath = resolve(root, '.agent-standard/manifest.json')
 
 function readJson (path) {
-  return JSON.parse(readFileSync(path, 'utf8'))
-}
-
-function packageType () {
-  return existsSync(resolve(root, 'package.json')) ? 'npm' : 'pypi'
+  return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''))
 }
 
 function fromPackageLock () {
@@ -56,10 +53,16 @@ function fromPyproject () {
     .map(match => ({ name: match[1], version: match[2].trim().replace(/^[~^<>=! ]+/, '') || 'NOASSERTION', type: 'pypi' })))
 }
 
-function dependencies () {
-  const raw = fromPackageLock() || fromPackageJson() || fromUvLock() || fromPyproject() || []
+function dependencies (manifest) {
+  const raw = manifest.project?.packageManager === 'uv'
+    ? (fromUvLock() || fromPyproject() || [])
+    : (fromPackageLock() || fromPackageJson() || [])
+  const projectNames = new Set([manifest.project?.name, manifest.project?.packageName]
+    .filter(Boolean).map(value => value.toLowerCase().replace(/[-_.]+/g, '-')))
   const unique = new Map(raw.map(item => [`${item.type}:${item.name}@${item.version}`, item]))
-  return [...unique.values()].sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`))
+  return [...unique.values()]
+    .filter(item => !projectNames.has(item.name.toLowerCase().replace(/[-_.]+/g, '-')))
+    .sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`))
 }
 
 function slug (value) {
@@ -75,8 +78,10 @@ function purl (item) {
 
 function cycloneDx (manifest, deps) {
   return {
+    $schema: 'https://cyclonedx.org/schema/bom-1.7.schema.json',
     bomFormat: 'CycloneDX',
     specVersion: '1.7',
+    serialNumber: `urn:uuid:${randomUUID()}`,
     version: 1,
     metadata: {
       timestamp: new Date().toISOString(),
@@ -93,7 +98,7 @@ function spdx (manifest, deps) {
     dataLicense: 'CC0-1.0',
     SPDXID: 'SPDXRef-DOCUMENT',
     name: `${manifest.project.name}-sbom`,
-    documentNamespace: `https://github.com/landphieran/agent-standard/sbom/${encodeURIComponent(manifest.project.packageName)}`,
+    documentNamespace: `https://spdx.org/spdxdocs/${encodeURIComponent(manifest.project.packageName)}-${randomUUID()}`,
     creationInfo: { created: new Date().toISOString(), creators: [`Tool: agent-standard-${manifest.standardVersion}`] },
     packages: deps.map((item, index) => ({
       name: item.name,
@@ -110,13 +115,33 @@ function spdx (manifest, deps) {
 
 function identities (format, value) {
   if (format === 'cyclonedx-json') {
-    if (value?.bomFormat !== 'CycloneDX' || !/^1\.[4-9]$/.test(value?.specVersion || '') || !Array.isArray(value?.components)) {
+    if (value?.bomFormat !== 'CycloneDX' || !['1.4', '1.5', '1.6', '1.7'].includes(value?.specVersion) ||
+        !Number.isInteger(value?.version) || value.version < 1 || !Array.isArray(value?.components)) {
       throw new Error('expected CycloneDX JSON with a supported specVersion and components array')
+    }
+    if (value.components.some(item => !item || typeof item.name !== 'string' || !item.name ||
+      typeof item.version !== 'string' || !item.version || typeof item.type !== 'string' || !item.type ||
+      typeof item.purl !== 'string' || !item.purl.startsWith('pkg:'))) {
+      throw new Error('CycloneDX components must contain type, name, version, and Package URL identities')
     }
     return value.components.map(item => `${item.name}@${item.version || 'NOASSERTION'}`).sort()
   }
-  if (value?.spdxVersion !== 'SPDX-2.3' || value?.SPDXID !== 'SPDXRef-DOCUMENT' || !Array.isArray(value?.packages)) {
+  if (value?.spdxVersion !== 'SPDX-2.3' || value?.SPDXID !== 'SPDXRef-DOCUMENT' || value?.dataLicense !== 'CC0-1.0' ||
+      typeof value?.name !== 'string' || !value.name || typeof value?.documentNamespace !== 'string' ||
+      !/^https?:\/\//.test(value.documentNamespace) || typeof value?.creationInfo?.created !== 'string' ||
+      !Array.isArray(value?.creationInfo?.creators) || !value.creationInfo.creators.length || !Array.isArray(value?.packages)) {
     throw new Error('expected SPDX 2.3 JSON with SPDXRef-DOCUMENT and packages array')
+  }
+  const ids = new Set()
+  for (const item of value.packages) {
+    const purl = item?.externalRefs?.some(reference => reference?.referenceCategory === 'PACKAGE-MANAGER' &&
+      reference?.referenceType === 'purl' && typeof reference?.referenceLocator === 'string' && reference.referenceLocator.startsWith('pkg:'))
+    if (!item || typeof item.name !== 'string' || !item.name || typeof item.versionInfo !== 'string' || !item.versionInfo ||
+        !/^SPDXRef-[A-Za-z0-9.-]+$/.test(item.SPDXID || '') || ids.has(item.SPDXID) ||
+        typeof item.downloadLocation !== 'string' || item.filesAnalyzed !== false || !purl) {
+      throw new Error('SPDX packages must contain unique IDs, names, versions, download locations, filesAnalyzed=false, and Package URL references')
+    }
+    ids.add(item.SPDXID)
   }
   return value.packages.map(item => `${item.name}@${item.versionInfo || 'NOASSERTION'}`).sort()
 }
@@ -125,10 +150,13 @@ function main () {
   if (!existsSync(manifestPath)) throw new Error('.agent-standard/manifest.json is missing')
   const manifest = readJson(manifestPath)
   const bom = manifest.supplyChain?.bom
-  if (!bom || !['strict', 'advisory'].includes(bom.mode) || bom.formats?.length !== bom.files?.length) {
+  const fileFor = { 'cyclonedx-json': 'bom.cdx.json', 'spdx-json': 'bom.spdx.json' }
+  if (!bom || !['strict', 'advisory'].includes(bom.mode) || !Array.isArray(bom.formats) || !Array.isArray(bom.files) ||
+      bom.formats.length !== bom.files.length || !bom.formats.length ||
+      bom.formats.some((format, index) => !fileFor[format] || bom.files[index] !== fileFor[format])) {
     throw new Error('manifest supplyChain.bom configuration is invalid')
   }
-  const deps = dependencies()
+  const deps = dependencies(manifest)
   const expected = deps.map(item => `${item.name}@${item.version}`).sort()
   const findings = []
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Cross-client definition-of-done gate. Claude invokes it as a Stop hook; CI
- * invokes the same file with --ci. Configuration is data in gate.json.
+ * Cross-client definition-of-done policy. Claude invokes it as a Stop hook;
+ * CI invokes it after the full repository verification command has passed.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -9,7 +9,8 @@ import { resolve } from 'node:path'
 
 const args = process.argv.slice(2)
 const isCI = args.includes('--ci')
-const root = process.env.CLAUDE_PROJECT_DIR || process.env.AGENT_STANDARD_ROOT || process.cwd()
+const policyOnly = args.includes('--policy-only')
+const root = resolve(process.env.CLAUDE_PROJECT_DIR || process.env.AGENT_STANDARD_ROOT || process.cwd())
 const argValue = flag => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : null }
 
 function git (gitArgs) {
@@ -124,7 +125,7 @@ function main () {
     }
 
     const testCommand = isCI ? (cfg.fullCommand || cfg.unitCommand) : (cfg.unitCommand || cfg.fullCommand)
-    if (testCommand && findings.length === 0 && !commandOk(testCommand)) findings.push(`Verification failed: \`${testCommand}\`.`)
+    if (!policyOnly && testCommand && findings.length === 0 && !commandOk(testCommand)) findings.push(`Verification failed: \`${testCommand}\`.`)
   }
 
   return finish(findings, mode)

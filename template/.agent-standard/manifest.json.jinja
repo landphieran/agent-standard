@@ -3,23 +3,37 @@
   "schemaVersion": 1,
   "standardVersion": "0.6.0-dev",
   "conformanceLevel": "AS-3",
+  "conformance": {
+    "target": "AS-3",
+    "status": "{% if mode == 'adopt' or gate == 'advisory' or bom_gate == 'advisory' or not ci %}adopting{% else %}pending-remote{% endif %}",
+    "localEnforcement": "{{ gate }}",
+    "remoteEnforcement": "unverified"
+  },
   "project": {
-    "name": "{{ project_name }}",
-    "packageName": "{{ pkg }}",
+    "name": {{ project_name | tojson }},
+    "packageName": {{ pkg | tojson }},
     "stack": "{{ language_stack }}",
+    "packageManager": "{% if language_stack in ['ts-node', 'ts-next'] %}npm{% else %}uv{% endif %}",
     "architecture": "{{ architecture }}",
     "topology": "{{ topology }}",
     "mode": "{{ mode }}"
   },
+  "governance": {
+    "codeowners": {{ codeowners | tojson }}
+  },
   "agents": [{% for agent in agents %}"{{ agent }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "workflow": {
+    "profile": "{{ workflow_profile }}",
+    "engine": "{% if workflow_profile == 'spec-driven' %}openspec{% else %}native{% endif %}"
+  },
   "commands": {
 {%- if language_stack in ['ts-node', 'ts-next'] %}
     "install": "npm install",
-    "verify": "npm run agent:verify",
+    "verify": "node .agent-standard/scripts/verify.mjs",
     "updateBom": "npm run sbom"
 {%- else %}
     "install": "uv sync",
-    "verify": "uv run python -c \"pass\" && node .agent-standard/scripts/doctor.mjs",
+    "verify": "node .agent-standard/scripts/verify.mjs",
     "updateBom": "node .agent-standard/scripts/sbom.mjs --write"
 {%- endif %}
   },
@@ -30,11 +44,16 @@
 {% endif -%}
     "SECURITY.md",
     "CONTRIBUTING.md",
+{% if mode == 'adopt' -%}
+    "docs/agent-standard.md",
+{% else -%}
     "docs/README.md",
     "docs/decisions/README.md",
     "docs/runbooks/README.md",
+{% endif -%}
     "docs/testing.md",
-    "docs/topology.md"
+    "docs/topology.md"{% if workflow_profile == 'lightweight' %},
+    "docs/changes/README.md"{% endif %}
   ],
   "skills": ["plan-change", "create-adr", "maintain-docs", "self-review", "security-review"],
   "qualityGate": {

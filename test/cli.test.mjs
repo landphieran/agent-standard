@@ -63,6 +63,8 @@ test('npm and uv toolchains pass the minimum-standard preflight', t => {
   assert.doesNotThrow(() => assertSupportedToolchain(uvRoot, 'py-fastapi'))
 })
 
+const BIN = join(REPO, 'bin', 'agent-standard.mjs')
+
 test('repository platform detection recognizes Azure DevOps and permits an explicit override', t => {
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-platform-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -74,8 +76,35 @@ test('repository platform detection recognizes Azure DevOps and permits an expli
   assert.equal(detectRepositoryPlatform(root, 'github'), 'github')
   assert.throws(() => detectRepositoryPlatform(root, 'gitlab'), /unsupported repository platform/)
 
+  git(['remote', 'set-url', 'origin', 'git@ssh.dev.azure.com:v3/acme/platform/service'])
+  assert.equal(detectRepositoryPlatform(root), 'azure-devops')
+
   git(['remote', 'set-url', 'origin', 'git@github.com:acme/service.git'])
   assert.equal(detectRepositoryPlatform(root), 'github')
+})
+
+test('verify fails with a clear error outside an agent-standard repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-verify-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'verify', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /not an agent-standard repository/)
+})
+
+test('update requires a Git repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-update-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'update', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /Git repository/)
+})
+
+test('help lists the update, verify, and doctor verbs', () => {
+  const r = spawnSync(process.execPath, [BIN, '--help'], { encoding: 'utf8' })
+  assert.equal(r.status, 0)
+  for (const verb of ['agent-standard init', 'agent-standard update', 'agent-standard verify', 'agent-standard doctor']) {
+    assert.match(r.stdout, new RegExp(verb.replace(/[-]/g, '\\$&')))
+  }
 })
 
 test('the npm-installed bin entry point executes through its package shim', () => {

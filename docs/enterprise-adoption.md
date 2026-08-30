@@ -60,7 +60,7 @@ node .agent-standard/scripts/audit-azure-devops.mjs \
   --json
 ```
 
-The evidence records the standard version, live/offline input mode, SHA-256 of the repository adapter, source revision when Azure supplies one, target scope, timestamp, and every `AS-ADO-*` result. Validate it with `.agent-standard/evidence/azure-devops-audit.schema.json` and publish it from a protected administrative/default-branch pipeline. Never map `System.AccessToken`, a PAT, or a service connection into an untrusted pull-request job merely to collect governance evidence.
+The live policy and Advanced Security queries use Azure DevOps REST directly with `SYSTEM_ACCESSTOKEN` or `AZURE_DEVOPS_EXT_PAT` supplied only through the environment; the Azure CLI is not required. The evidence records the standard version, live/offline input mode, SHA-256 of the repository adapter, source revision when Azure supplies one, target scope, timestamp, and every `AS-ADO-*` result. Validate it with `.agent-standard/evidence/azure-devops-audit.schema.json` and publish it from a protected administrative/default-branch pipeline. Never map `System.AccessToken`, a PAT, or a service connection into an untrusted pull-request job merely to collect governance evidence.
 
 Azure DevOps stores audit events for 90 days, so longer retention requires export or audit streaming ([Azure DevOps auditing](https://learn.microsoft.com/en-us/azure/devops/organizations/audit/azure-devops-auditing?view=azure-devops)). Pipeline run and artifact retention is project-level rather than per YAML pipeline and must also be set administratively ([pipeline retention](https://learn.microsoft.com/en-us/azure/devops/pipelines/policies/retention?view=azure-devops)).
 

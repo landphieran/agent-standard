@@ -4,6 +4,7 @@ This project has not published its first release. Until then, changes accumulate
 
 ## Unreleased
 
+- Reconciled the Azure adapter with the hardened day-two CLI, made CI change detection preserve both root-commit and merge-base behavior, replaced the Windows-incompatible Azure CLI policy query with token-safe REST access, and recognized Azure DevOps SSH remotes.
 - Added a machine-readable Azure DevOps enterprise baseline, enterprise rollout/control guidance, schema-versioned remote-audit evidence, and explicit Azure Pipeline workspace/credential hardening.
 - Added an Azure DevOps adapter with origin detection, provider-isolated review metadata, standalone and immutable central-template Azure Pipeline modes, Advanced Security expectations, SBOM publication, and a read-only remote-policy auditor.
 - Renamed the pre-release ownership contract from GitHub-specific `codeowners` to portable `owners`; the GitHub adapter still derives CODEOWNERS from it.

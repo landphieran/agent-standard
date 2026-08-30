@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -171,28 +170,64 @@ function readJson (path) {
   return JSON.parse(readFileSync(resolve(path), 'utf8').replace(/^\uFEFF/, ''))
 }
 
-function readPolicies (options, branch) {
+function authorizationHeader (label, environment = process.env) {
+  const systemToken = environment.SYSTEM_ACCESSTOKEN
+  const pat = environment.AZURE_DEVOPS_EXT_PAT
+  if (!systemToken && !pat) {
+    throw new Error(`${label} requires SYSTEM_ACCESSTOKEN or AZURE_DEVOPS_EXT_PAT; tokens are read from the environment and never written`)
+  }
+  return systemToken
+    ? `Bearer ${systemToken}`
+    : `Basic ${Buffer.from(`:${pat}`).toString('base64')}`
+}
+
+function azureDevOpsApiBase (organization) {
+  const url = new URL(organization)
+  const hostname = url.hostname.toLowerCase()
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error('Azure DevOps organization must be an HTTPS URL without embedded credentials')
+  }
+  if (hostname !== 'dev.azure.com' && !hostname.endsWith('.visualstudio.com')) {
+    throw new Error('Azure DevOps organization must use a dev.azure.com or visualstudio.com URL')
+  }
+  url.search = ''
+  url.hash = ''
+  if (!url.pathname.endsWith('/')) url.pathname += '/'
+  return url
+}
+
+export function policyEndpoint (organization, project, repository, branch) {
+  const url = new URL(`${encodeURIComponent(project)}/_apis/git/policy/configurations`, azureDevOpsApiBase(organization))
+  url.searchParams.set('repositoryId', repository)
+  url.searchParams.set('refName', branch.startsWith('refs/') ? branch : `refs/heads/${branch}`)
+  url.searchParams.set('api-version', '7.1')
+  return url.toString()
+}
+
+async function authenticatedGetJson (url, label, { environment = process.env, request = fetch } = {}) {
+  const response = await request(url, {
+    headers: { Authorization: authorizationHeader(label, environment) },
+    redirect: 'error',
+    signal: AbortSignal.timeout(30000)
+  })
+  if (!response.ok) throw new Error(`${label} failed with HTTP ${response.status}`)
+  return response.json()
+}
+
+export async function readPolicies (options, branch, dependencies) {
   if (options.policyFile) return readJson(options.policyFile)
   if (!options.organization || !options.project || !options.repository) {
     throw new Error('provide --organization, --project, and --repository, or use --policy-file for an offline audit')
   }
-  const az = process.platform === 'win32' ? 'az.cmd' : 'az'
-  const result = spawnSync(az, [
-    'repos', 'policy', 'list', '--organization', options.organization, '--project', options.project,
-    '--repository-id', options.repository, '--branch', branch, '--only-show-errors', '--output', 'json'
-  ], {
-    encoding: 'utf8',
-    timeout: 30000,
-    env: { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: 'no' }
-  })
-  if (result.status !== 0) {
-    throw new Error(`Azure policy query failed; install and authenticate the azure-devops CLI extension explicitly: ${(result.stderr || result.stdout || result.error?.message || '').trim()}`)
-  }
-  return JSON.parse(result.stdout)
+  return authenticatedGetJson(
+    policyEndpoint(options.organization, options.project, options.repository, branch),
+    'Azure policy query',
+    dependencies
+  )
 }
 
 export function advancedSecurityEndpoint (organization, project, repository) {
-  const url = new URL(organization)
+  const url = azureDevOpsApiBase(organization)
   const hostname = url.hostname.toLowerCase()
   let base
   if (hostname === 'dev.azure.com') {
@@ -213,18 +248,8 @@ async function readSecurity (options, required) {
   if (!options.organization || !options.project || !options.repository) {
     throw new Error('Advanced Security audit requires Azure DevOps coordinates or --security-file')
   }
-  const systemToken = process.env.SYSTEM_ACCESSTOKEN
-  const pat = process.env.AZURE_DEVOPS_EXT_PAT
-  if (!systemToken && !pat) {
-    throw new Error('Advanced Security audit requires SYSTEM_ACCESSTOKEN or AZURE_DEVOPS_EXT_PAT; tokens are read from the environment and never written')
-  }
   const url = advancedSecurityEndpoint(options.organization, options.project, options.repository)
-  const authorization = systemToken
-    ? `Bearer ${systemToken}`
-    : `Basic ${Buffer.from(`:${pat}`).toString('base64')}`
-  const response = await fetch(url, { headers: { Authorization: authorization }, signal: AbortSignal.timeout(30000) })
-  if (!response.ok) throw new Error(`Advanced Security query failed with HTTP ${response.status}`)
-  return response.json()
+  return authenticatedGetJson(url, 'Advanced Security query')
 }
 
 async function main () {
@@ -239,7 +264,7 @@ async function main () {
   }
   const options = parseArgs(process.argv.slice(2))
   const branch = options.branch || config.defaultBranch
-  const policyResponse = readPolicies(options, branch)
+  const policyResponse = await readPolicies(options, branch)
   const policies = Array.isArray(policyResponse) ? policyResponse : policyResponse?.value
   if (!Array.isArray(policies)) throw new Error('Azure policy response must contain a JSON array')
   const securityRequired = Object.values(config.advancedSecurity || {}).some(Boolean)

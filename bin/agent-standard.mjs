@@ -10,9 +10,12 @@ const command = argv.shift()
 
 function usage () {
   console.log(`Usage:
-  agent-standard init [path] --owner @org/team [options]
+  agent-standard init   [path] --owner @org/team [options]
+  agent-standard update [path] [--ref <git-ref>] [--dry-run]
+  agent-standard verify [path] [-- passthrough]
+  agent-standard doctor [path] [--json]
 
-Options:
+init options:
   --source <template>       Copier source (default: gh:landphieran/agent-standard)
   --ref <git-ref>           Template ref (default: HEAD during pre-release)
   --name <project-name>     Project name; otherwise detected from the destination
@@ -22,6 +25,9 @@ Options:
   --workflow <profile>      lightweight or spec-driven (default: lightweight)
   --advanced                Expose the advanced Copier profile using safe defaults
   --dry-run                 Render and verify without changing the destination
+
+update applies a template bump through the same staged, atomic, rollback-safe
+transaction as init. verify and doctor run the repository's own pinned scripts.
 `)
 }
 
@@ -96,7 +102,7 @@ export function detectRepositoryPlatform (root, requested) {
   }
   try {
     const remote = git(root, ['remote', 'get-url', 'origin']).toLowerCase()
-    if (remote.includes('dev.azure.com/') || remote.includes('visualstudio.com/')) return 'azure-devops'
+    if (remote.includes('dev.azure.com') || remote.includes('visualstudio.com/')) return 'azure-devops'
     if (remote.includes('github.com')) return 'github'
   } catch { /* a greenfield destination might not have a Git remote yet */ }
   return 'github'
@@ -266,6 +272,80 @@ function init () {
   }
 }
 
+function targetAndRest () {
+  let target = '.'
+  if (argv[0] && !argv[0].startsWith('-')) target = argv.shift()
+  return { target: resolve(target), rest: argv.slice() }
+}
+
+function localScript (target, name) {
+  const path = join(target, '.agent-standard', 'scripts', name)
+  if (!existsSync(path)) {
+    throw new Error(`${target} is not an agent-standard repository (missing .agent-standard/scripts/${name}); run from the repository root or pass its path`)
+  }
+  return path
+}
+
+function passthrough (name) {
+  const { target, rest } = targetAndRest()
+  const result = spawnSync(process.execPath, [localScript(target, name), ...rest], { cwd: target, stdio: 'inherit' })
+  process.exitCode = result.status ?? 1
+}
+
+function update () {
+  const ref = option('--ref') || 'HEAD'
+  const dryRun = flag('--dry-run')
+  const targetArgument = argv.shift() || '.'
+  if (argv.length) throw new Error(`unexpected arguments: ${argv.join(' ')}`)
+
+  const target = resolve(targetArgument)
+  let repositoryRoot
+  try { repositoryRoot = resolve(git(target, ['rev-parse', '--show-toplevel'])) }
+  catch { throw new Error('update must run inside a Git repository; initialise Git or pass the repository path') }
+  const sameRoot = process.platform === 'win32'
+    ? repositoryRoot.toLowerCase() === target.toLowerCase()
+    : repositoryRoot === target
+  if (!sameRoot) throw new Error('update must target the Git repository root')
+  if (!existsSync(join(target, '.agent-standard', 'copier-answers.yml'))) {
+    throw new Error('no agent-standard answers file found; run "agent-standard init" first')
+  }
+  if (git(target, ['status', '--porcelain'])) throw new Error('update requires a clean worktree; commit or stash current changes')
+  const initialHead = git(target, ['rev-parse', 'HEAD'])
+
+  const tempRoot = mkdtempSync(join(tmpdir(), 'agent-standard-update-'))
+  const stage = join(tempRoot, 'stage')
+  const backup = join(tempRoot, 'backup')
+  let worktree = false
+  try {
+    git(target, ['worktree', 'add', '--detach', stage, 'HEAD'], false)
+    worktree = true
+    run('uvx', ['copier', 'update', '--trust', '--defaults', '--answers-file', '.agent-standard/copier-answers.yml', '--vcs-ref', ref, stage])
+
+    const files = changedFiles(stage)
+    console.log(`\nagent-standard update: ${files.length} files`)
+    for (const path of files) console.log(`  ${path}`)
+    if (dryRun) {
+      console.log('\nDry run complete; destination was not changed.')
+      return
+    }
+    if (!files.length) {
+      console.log('\nAlready up to date; nothing to apply.')
+      return
+    }
+    if (git(target, ['status', '--porcelain']) || git(target, ['rev-parse', 'HEAD']) !== initialHead) {
+      throw new Error('destination changed during staging; no files were applied')
+    }
+    copyAtomically(stage, target, files, backup)
+    console.log(`\nUpdated agent-standard in ${target}.`)
+    console.log('Next: review the diff, reinstall if dependency manifests changed, refresh the SBOM, and run "agent-standard verify".')
+  } finally {
+    if (worktree) {
+      try { git(target, ['worktree', 'remove', '--force', stage], false) } catch { console.warn(`warning: remove temporary worktree manually: ${stage}`) }
+    }
+    if (existsSync(tempRoot)) rmSync(tempRoot, { recursive: true, force: true })
+  }
+}
+
 const invokedAsScript = (() => {
   if (!process.argv[1]) return false
   try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch { return false }
@@ -274,6 +354,9 @@ const invokedAsScript = (() => {
 if (invokedAsScript) {
   try {
     if (command === 'init') init()
+    else if (command === 'update') update()
+    else if (command === 'verify') passthrough('verify.mjs')
+    else if (command === 'doctor') passthrough('doctor.mjs')
     else { usage(); if (command && !['help', '--help', '-h'].includes(command)) process.exitCode = 1 }
   } catch (error) {
     console.error(`agent-standard: ${error.message}`)

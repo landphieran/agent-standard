@@ -56,7 +56,7 @@ The minimum adapter targets Azure DevOps Services. Its Advanced Security tasks a
 
 ## Read-only remote audit
 
-Install and authenticate the Azure CLI plus the `azure-devops` extension explicitly, then run:
+Provide either `SYSTEM_ACCESSTOKEN` from a protected Azure Pipeline or a short-lived, least-privileged `AZURE_DEVOPS_EXT_PAT` through the process environment, then run:
 
 ```bash
 node .agent-standard/scripts/audit-azure-devops.mjs \
@@ -67,7 +67,7 @@ node .agent-standard/scripts/audit-azure-devops.mjs \
   --json
 ```
 
-In an Azure Pipeline, the script can use `SYSTEM_COLLECTIONURI`, `SYSTEM_TEAMPROJECT`, and `BUILD_REPOSITORY_ID`. CI-enabled audits read `SYSTEM_ACCESSTOKEN` or `AZURE_DEVOPS_EXT_PAT` from the environment for the Advanced Security enablement query. Tokens are neither accepted on the command line nor written to output. The auditor performs GET/list operations only; it never applies policy. Run credentialed evidence collection only from a protected administrative or default-branch pipeline. Never map a token into pull-request validation because the pull request can change executable repository code.
+In an Azure Pipeline, the script can use `SYSTEM_COLLECTIONURI`, `SYSTEM_TEAMPROJECT`, and `BUILD_REPOSITORY_ID`. Both the branch-policy and Advanced Security queries call Azure DevOps REST endpoints directly; the Azure CLI is not required. Tokens are neither accepted on the command line nor written to output or error details. The auditor performs GET/list operations only; it never applies policy. Run credentialed evidence collection only from a protected administrative or default-branch pipeline. Never map a token into pull-request validation because the pull request can change executable repository code.
 
 Policy evaluation can be tested without Azure access:
 

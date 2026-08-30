@@ -96,6 +96,48 @@ test('Azure DevOps remote evaluator accepts the complete minimum policy baseline
   assert.match(advancedSecurityEndpoint('https://acme.visualstudio.com', 'Platform', 'repo'), /^https:\/\/acme\.advsec\.visualstudio\.com\/Platform\//)
 })
 
+test('Azure policy audit uses the REST endpoint with environment-only credentials', async t => {
+  const { policyEndpoint, readPolicies } = await loadEvaluator(t)
+  assert.doesNotMatch(readFileSync(SOURCE, 'utf8'), /az\.cmd|repos['"]\s*,\s*['"]policy/)
+  const options = {
+    organization: 'https://dev.azure.com/acme',
+    project: 'Platform Team',
+    repository: 'repo/id'
+  }
+  const endpoint = new URL(policyEndpoint(options.organization, options.project, options.repository, 'main'))
+  assert.equal(endpoint.pathname, '/acme/Platform%20Team/_apis/git/policy/configurations')
+  assert.equal(endpoint.searchParams.get('repositoryId'), 'repo/id')
+  assert.equal(endpoint.searchParams.get('refName'), 'refs/heads/main')
+  assert.equal(endpoint.searchParams.get('api-version'), '7.1')
+  assert.throws(
+    () => policyEndpoint('http://dev.azure.com/acme', options.project, options.repository, 'main'),
+    /must be an HTTPS URL/
+  )
+
+  let request
+  const response = await readPolicies(options, 'main', {
+    environment: { SYSTEM_ACCESSTOKEN: 'test-system-token' },
+    request: async (url, init) => {
+      request = { url, init }
+      return { ok: true, status: 200, json: async () => ({ value: policies }) }
+    }
+  })
+
+  assert.deepEqual(response, { value: policies })
+  assert.equal(request.url, endpoint.toString())
+  assert.equal(request.init.headers.Authorization, 'Bearer test-system-token')
+  assert.equal(request.init.redirect, 'error')
+  assert.doesNotMatch(request.url, /test-system-token/)
+
+  await assert.rejects(
+    readPolicies(options, 'main', {
+      environment: { AZURE_DEVOPS_EXT_PAT: 'test-pat-that-must-not-echo' },
+      request: async () => ({ ok: false, status: 401 })
+    }),
+    error => error.message === 'Azure policy query failed with HTTP 401' && !error.message.includes('test-pat-that-must-not-echo')
+  )
+})
+
 test('Azure DevOps remote evaluator requires the portable owners to be bound to Azure identities', async t => {
   const { evaluateAzureDevOps } = await loadEvaluator(t)
   const unbound = structuredClone(config)

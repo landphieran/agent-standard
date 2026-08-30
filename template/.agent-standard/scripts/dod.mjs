@@ -65,7 +65,12 @@ function changedFiles () {
     if (!gitOk(['rev-parse', '--verify', `${head}^`]) && git(['rev-parse', base]) === git(['rev-parse', head])) {
       return [...new Set(normalise(git(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', head])))]
     }
-    return [...new Set(normalise(git(['diff', '--name-only', base, head])))]
+    // Diff from the merge-base (three-dot semantics) so only what this branch
+    // introduced is evaluated. Two-dot `base head` would also surface files that
+    // merely advanced on the base branch after the fork point and misclassify
+    // them as this PR's source changes, falsely tripping the no-test block.
+    const from = (() => { try { return git(['merge-base', base, head]) } catch { return base } })()
+    return [...new Set(normalise(git(['diff', '--name-only', from, head])))]
   }
   if (!gitOk(['rev-parse', 'HEAD'])) return null
   return [...new Set([...normalise(git(['diff', '--name-only', 'HEAD'])), ...normalise(git(['ls-files', '--others', '--exclude-standard']))])]

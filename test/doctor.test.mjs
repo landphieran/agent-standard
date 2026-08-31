@@ -114,6 +114,7 @@ function azureFixture () {
   azureManifest.platform = { repository: 'azure-devops', ci: 'azure-pipelines', pipelineMode: 'standalone' }
   write(root, '.agent-standard/manifest.json', JSON.stringify(azureManifest))
   write(root, '.agent-standard/platforms/azure-devops.schema.json', '{}')
+  write(root, '.agent-standard/evidence/azure-devops-audit.schema.json', '{}')
   write(root, '.agent-standard/platforms/azure-devops.json', JSON.stringify({
     $schema: './azure-devops.schema.json',
     schemaVersion: 1,
@@ -149,22 +150,30 @@ function azureFixture () {
   write(root, '.agent-standard/scripts/audit-azure-devops.mjs', '')
   write(root, '.azuredevops/pull_request_template.md', '<!-- agent-standard:start -->\n## Agent-standard checks\n<!-- agent-standard:end -->\n')
   write(root, 'azure-pipelines.yml', [
-    'trigger: none',
+    'trigger:',
+    '  batch: true',
     'pr: none',
-    'steps:',
-    '  - checkout: self',
-    '    fetchDepth: 0',
-    '  - script: node .agent-standard/scripts/verify.mjs',
-    '  - script: node .agent-standard/scripts/dod.mjs --ci --policy-only',
-    '    env:',
-    '      DOD_BASE: HEAD^1',
-    '  - task: UseNode@1',
-    '    inputs:',
-    '      version: 22.x',
-    '  - task: AdvancedSecurity-Dependency-Scanning@1',
-    '  - task: PublishPipelineArtifact@1',
-    '    inputs:',
-    '      targetPath: bom.cdx.json',
+    'jobs:',
+    '  - job: verify',
+    '    timeoutInMinutes: 30',
+    '    workspace:',
+    '      clean: all',
+    '    steps:',
+    '      - checkout: self',
+    '        fetchDepth: 0',
+    '        fetchTags: false',
+    '        persistCredentials: false',
+    '      - script: node .agent-standard/scripts/verify.mjs',
+    '      - script: node .agent-standard/scripts/dod.mjs --ci --policy-only',
+    '        env:',
+    '          DOD_BASE: HEAD^1',
+    '      - task: UseNode@1',
+    '        inputs:',
+    '          version: 22.x',
+    '      - task: AdvancedSecurity-Dependency-Scanning@1',
+    '      - task: PublishPipelineArtifact@1',
+    '        inputs:',
+    '          targetPath: bom.cdx.json',
     ''
   ].join('\n'))
   return root
@@ -197,6 +206,54 @@ test('adoption setup preserves legacy governed docs and defers normalization to 
   const normal = runDoctor(root)
   assert.equal(normal.status, 1)
   assert.match(normal.stdout, /docs\/testing\.md is missing governance frontmatter/)
+})
+
+test('adoption defers, then enforces, gate commands whose npm scripts are absent', t => {
+  const root = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const adopted = manifest()
+  adopted.project.mode = 'adopt'
+  adopted.conformance.status = 'adopting'
+  write(root, '.agent-standard/manifest.json', JSON.stringify(adopted))
+  write(root, '.agent-standard/gate.json', JSON.stringify({
+    mode: 'strict',
+    waiversFile: '.agent-standard/waivers.json',
+    openspec: false,
+    doctorCommand: 'node .agent-standard/scripts/doctor.mjs',
+    unitCommand: 'npm run test:unit',
+    fullCommand: 'npm run verify:code'
+  }))
+  write(root, 'package.json', JSON.stringify({ name: 'legacy', scripts: { build: 'tsc' } }))
+
+  // Setup: an actionable advisory on stderr, but bootstrap is not failed.
+  const setup = runDoctor(root, '--setup')
+  assert.equal(setup.status, 0, `${setup.stderr}\n${setup.stdout}`)
+  assert.match(setup.stderr, /\[agent-standard setup\][\s\S]*npm run test:unit/)
+
+  // Normal verification: the unmapped command becomes a blocking finding.
+  const normal = runDoctor(root)
+  assert.equal(normal.status, 1)
+  assert.match(normal.stdout, /gate\.unitCommand runs[\s\S]*npm run test:unit/)
+})
+
+test('doctor flags a managed skill copy left behind after removal, but not a team-added skill', t => {
+  const root = fixture()
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+
+  // Tracker records a skill no longer in .ruler/skills whose copy still exists.
+  write(root, '.agent-standard/managed-skills.json', JSON.stringify({ skills: ['example', 'gone'], targets: ['.agents/skills'] }))
+  write(root, '.agents/skills/gone/SKILL.md', '---\nname: gone\ndescription: Removed skill.\n---\n')
+  const stale = runDoctor(root, '--setup')
+  assert.equal(stale.status, 1)
+  assert.match(stale.stdout, /\.agents\/skills\/gone\/SKILL\.md is an orphaned standard skill/)
+
+  // A skill present in source (even if not in manifest.skills) is not an orphan.
+  write(root, '.agent-standard/managed-skills.json', JSON.stringify({ skills: ['example', 'custom'], targets: ['.agents/skills'] }))
+  write(root, '.ruler/skills/custom/SKILL.md', '---\nname: custom\ndescription: Team skill.\n---\n')
+  write(root, '.agents/skills/custom/SKILL.md', '---\nname: custom\ndescription: Team skill.\n---\n')
+  rmSync(join(root, '.agents/skills/gone'), { recursive: true, force: true })
+  const clean = runDoctor(root, '--setup')
+  assert.equal(clean.status, 0, `${clean.stderr}\n${clean.stdout}`)
 })
 
 test('spec-driven validation requires an OpenSpec artifact for each selected client', t => {

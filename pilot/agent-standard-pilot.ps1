@@ -21,8 +21,9 @@ $ErrorActionPreference = 'Stop'
 $settings = Import-PowerShellDataFile -LiteralPath (Join-Path $PSScriptRoot 'pilot-settings.psd1')
 if (-not $Architecture) { $Architecture = $settings.DefaultArchitecture }
 if (-not $Workflow) { $Workflow = $settings.DefaultWorkflow }
+$policyUrl = "$($settings.PolicyRepository.TrimEnd('/'))/blob/$Revision/$($settings.PolicyPath.TrimStart('/'))"
 
-Write-Host "Policy: $($settings.PolicyUrl)"
+Write-Host "Policy: $policyUrl"
 Write-Host "Support: $($settings.SupportContact)"
 Write-Host "Pinned standard revision: $Revision"
 

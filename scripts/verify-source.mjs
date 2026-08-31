@@ -16,9 +16,12 @@ const required = [
   'template/.agent-standard/scripts/sync-skills.mjs',
   'template/.agent-standard/scripts/verify.mjs',
   'modules/azure-devops/README.md',
+  'modules/azure-devops/enterprise-baseline.json',
+  'modules/azure-devops/enterprise-baseline.schema.json',
   'modules/azure-devops/templates/agent-standard.yml',
   "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.json{% endif %}.jinja",
   "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}",
+  "template/.agent-standard/evidence/{% if repository_platform == 'azure-devops' %}azure-devops-audit.schema.json{% endif %}",
   "template/.agent-standard/scripts/{% if repository_platform == 'azure-devops' %}audit-azure-devops.mjs{% endif %}",
   "template/.azuredevops/{% if repository_platform == 'azure-devops' %}pull_request_template.md{% endif %}.jinja",
   "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja",
@@ -104,6 +107,9 @@ for (const path of [
 }
 
 const copier = readFileSync(resolve(root, 'copier.yml'), 'utf8')
+const cli = readFileSync(resolve(root, 'bin/agent-standard.mjs'), 'utf8')
+const renderVerifier = readFileSync(resolve(root, 'scripts/verify-render.ps1'), 'utf8')
+const readme = readFileSync(resolve(root, 'README.md'), 'utf8')
 const bootstrap = readFileSync(resolve(root, 'template/.agent-standard/scripts/bootstrap.mjs'), 'utf8')
 const manifestTemplate = readFileSync(resolve(root, 'template/.agent-standard/manifest.json.jinja'), 'utf8')
 const manifestSchema = JSON.parse(readFileSync(resolve(root, 'template/.agent-standard/manifest.schema.json'), 'utf8'))
@@ -114,7 +120,17 @@ if (!copier.includes('_answers_file: .agent-standard/copier-answers.yml')) findi
 if (!copier.includes('repository_platform:')) findings.push('Copier must expose a repository platform selection')
 if (!copier.includes('azure_pipeline_mode:')) findings.push('Copier must expose the Azure Pipeline governance mode')
 if (!copier.includes('standard_revision:') || !copier.includes('default: development')) findings.push('Copier must carry the selected standard revision into rendered repositories')
-if (!copier.includes('copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>')) findings.push('Copier update guidance must pin and record the same immutable revision')
+if (!copier.includes('agent-standard update . --ref <FULL_SHA> --dry-run')) findings.push('Update guidance must assess and record the same immutable revision')
+if (!cli.includes("copier: '9.17.2'") || !cli.includes("`${tool}==${version}`")) findings.push('CLI Copier execution must use the reviewed exact version')
+for (const tool of ['copier==9.17.2', 'check-jsonschema==0.38.0', 'yamllint==1.38.0']) {
+  if (!renderVerifier.includes(tool)) findings.push(`Render verification must pin ${tool}`)
+}
+for (const [variable, module] of [['jsonSchemaTool', 'python -m check_jsonschema'], ['yamlLintTool', 'python -m yamllint']]) {
+  if (!renderVerifier.includes(`uv run --no-project --with $${variable} ${module}`)) {
+    findings.push(`Render verification must use the Windows-compatible pinned module entry point: ${module}`)
+  }
+}
+if (!readme.includes('npx.cmd --yes "--package=github:landphieran/agent-standard#<FULL_SHA>"')) findings.push('README must provide a PowerShell-safe package invocation')
 if (!copier.includes("azure_template_ref | length != 40")) findings.push('Azure Pipeline template refs must require an immutable 40-character commit')
 if (product && !manifestTemplate.includes(`"standardVersion": "${product.version}"`)) findings.push('rendered manifest version must match the canonical package.json version')
 if (!manifestTemplate.includes('"standardRevision": "{{ standard_revision }}"')) findings.push('rendered manifest must record the selected standard revision')
@@ -128,17 +144,20 @@ if (!bootstrap.includes('--no-skills')) findings.push('Ruler must not own client
 if (!bootstrap.includes("'.agent-standard/scripts/sbom.mjs', '--write'")) findings.push('Bootstrap must refresh the configured SBOM')
 if (!/@fission-ai\/openspec@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('OpenSpec bootstrap must use an exact version')
 if (!/@intellectronica\/ruler@\d+\.\d+\.\d+/.test(bootstrap)) findings.push('Ruler bootstrap must use an exact version')
-for (const required of ['pr: none', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1', 'extends:']) {
+for (const required of ['pr: none', 'batch: true', 'fetchDepth: 0', 'fetchTags: false', 'persistCredentials: false', 'timeoutInMinutes: 30', 'clean: all', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1', 'extends:']) {
   if (!azurePipeline.includes(required)) findings.push(`Azure Pipeline template is missing ${required}`)
 }
-for (const required of ['parameters:', 'stages:', 'fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Dependency-Scanning@1', 'AdvancedSecurity-Codeql-Analyze@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1']) {
+for (const required of ['parameters:', 'stages:', 'fetchDepth: 0', 'fetchTags: false', 'persistCredentials: false', 'timeoutInMinutes: 30', 'clean: all', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'AdvancedSecurity-Codeql-Init@1', 'AdvancedSecurity-Dependency-Scanning@1', 'AdvancedSecurity-Codeql-Analyze@1', 'WaitForProcessing: true', 'PublishPipelineArtifact@1']) {
   if (!azureCentralTemplate.includes(required)) findings.push(`Azure central template is missing ${required}`)
 }
 if (/\b(?:script|bash|powershell):\s*\$\{\{\s*parameters\./.test(azureCentralTemplate)) findings.push('Azure central template must not interpolate parameters into shell commands')
 
 for (const relative of [
   'template/.agent-standard/manifest.schema.json',
-  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}"
+  "template/.agent-standard/platforms/{% if repository_platform == 'azure-devops' %}azure-devops.schema.json{% endif %}",
+  "template/.agent-standard/evidence/{% if repository_platform == 'azure-devops' %}azure-devops-audit.schema.json{% endif %}",
+  'modules/azure-devops/enterprise-baseline.json',
+  'modules/azure-devops/enterprise-baseline.schema.json'
 ]) {
   try { JSON.parse(readFileSync(resolve(root, relative), 'utf8')) } catch (error) { findings.push(`${relative} is invalid JSON: ${error.message}`) }
 }

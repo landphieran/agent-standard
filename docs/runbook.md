@@ -29,6 +29,13 @@ The v1 certified hosts are Windows 11 with PowerShell 7 and Ubuntu 24.04 with ba
 
 Choose a published full 40-character commit SHA and use it in both positions below:
 
+```powershell
+npx.cmd --yes "--package=github:landphieran/agent-standard#<FULL_SHA>" -- agent-standard init . `
+  --ref <FULL_SHA> `
+  --owner '@acme/platform' `
+  --architecture service-based
+```
+
 ```bash
 npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init . \
   --ref <FULL_SHA> \
@@ -63,13 +70,7 @@ git rev-parse HEAD
 
 Commit or stash all work until `git status --short` is empty. Then rerun the same pinned assessment command with `--apply`. The installer rechecks the commit, worktree state, collision-sensitive destination fingerprints, and ownership rules immediately before copying.
 
-```bash
-npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init . \
-  --ref <FULL_SHA> \
-  --owner '@acme/platform' \
-  --architecture service-based \
-  --apply
-```
+Append `--apply` to the same PowerShell or bash command. Do not change its package SHA, `--ref`, owner, architecture, or other assessed inputs.
 
 Exit meanings are part of the v1 CLI contract:
 
@@ -125,23 +126,23 @@ git clean -fd
 git status --short
 ```
 
-Do not run the final clean command until its dry-run list has been reviewed. After the adoption is committed, use `git revert <adoption-commit>` so recovery is visible in history. V1 does not provide a post-success rollback command or transactional Copier update.
+Do not run the final clean command until its dry-run list has been reviewed. After the adoption is committed, use `git revert <adoption-commit>` so recovery is visible in history. V1 does not provide a post-success rollback command; initialization and updates do roll back partial copy failures.
 
 ## Future updates
 
-Copier remains the update interface:
+Assess an immutable update through the same package revision that supplies the template:
 
 ```bash
-copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>
+npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard update . --ref <FULL_SHA> --dry-run
 ```
 
-Review the three-way merge, reinstall when dependency manifests change, refresh the SBOM, run the manifest verification command, confirm generated instructions and skills remain tracked, and commit the complete update. Exact generated text may change; Copier answer names/values, manifest schema, control IDs, and ownership seams are the compatibility contract.
+On PowerShell, use `npx.cmd` and quote the `--package=...#<FULL_SHA>` argument as shown in the initial setup example. Review the dry-run inventory, then rerun without `--dry-run`. The CLI stages Copier's three-way merge away from the repository and applies it only from a clean, unchanged worktree. Reinstall when dependency manifests change, refresh the SBOM, run `agent-standard verify`, confirm generated instructions and skills remain tracked, and commit the complete update. Exact generated text may change; Copier answer names/values, manifest schema, control IDs, and ownership seams are the compatibility contract.
 
 ## Remote enforcement
 
 Generated workflows provide checks but do not make themselves mandatory. After the first push is green, an authorized administrator applies and audits:
 
-- GitHub rulesets and security settings in [github-hardening.md](github-hardening.md).
-- Azure DevOps Build Validation, review policies, Advanced Security, and the read-only audit in [azure-devops.md](azure-devops.md).
+- GitHub: branch rulesets and security settings in [github-hardening.md](github-hardening.md).
+- Azure DevOps: required Build Validation, review policies, Advanced Security, revision-bound read-only audit evidence, and the administrator baseline in [azure-devops.md](azure-devops.md) and [enterprise-adoption.md](enterprise-adoption.md).
 
 Until that external state is audited, the manifest remains `pending-remote` or `adopting`. Local success alone is not a conformance claim, and initialization never authorizes remote policy changes.

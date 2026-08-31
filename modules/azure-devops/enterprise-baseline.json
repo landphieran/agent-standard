@@ -1,0 +1,64 @@
+{
+  "$schema": "./enterprise-baseline.schema.json",
+  "schemaVersion": 1,
+  "service": "azure-devops-services",
+  "controlSet": "agent-standard-enterprise-minimum",
+  "controls": {
+    "identity": {
+      "controlIds": ["AS-ENT-ID-001", "AS-ENT-AUTH-001"],
+      "entraBackedOrganization": true,
+      "privateProjects": true,
+      "productionAutomationUsesFederatedIdentity": true,
+      "personalAccessTokens": {
+        "productionAutomationAllowed": false,
+        "fullScopeAllowed": false,
+        "globalAllowed": false,
+        "maximumLifetimeDays": 90
+      }
+    },
+    "pipelineSettings": {
+      "controlIds": ["AS-ENT-PIPE-001", "AS-ENT-PIPE-002"],
+      "limitJobAuthorizationScopeToCurrentProject": true,
+      "protectAccessToRepositoriesInYamlPipelines": true,
+      "limitVariablesSetAtQueueTime": true,
+      "shellTaskArgumentsValidation": true,
+      "disableClassicBuildPipelineCreation": true,
+      "disableClassicReleasePipelineCreation": true,
+      "disableImpliedYamlCiTrigger": true,
+      "marketplaceTasks": "disabled-or-explicitly-approved"
+    },
+    "pipelineResources": {
+      "controlIds": ["AS-ENT-RESOURCE-001"],
+      "authorization": "explicit-per-pipeline",
+      "extendsRequiredTemplateCheck": true,
+      "serviceConnectionAuthentication": "workload-identity-federation-when-used",
+      "serviceConnectionAccess": "explicit-per-pipeline"
+    },
+    "repositories": {
+      "controlIds": ["AS-ENT-REPO-001"],
+      "protectedDefaultBranch": true,
+      "contributorPolicyBypassAllowed": false,
+      "contributorForcePushAllowed": false,
+      "breakGlass": "time-bound-and-audited"
+    },
+    "agents": {
+      "controlIds": ["AS-ENT-AGENT-001"],
+      "untrustedPullRequests": "ephemeral-isolated",
+      "selfHostedAgentState": "stateless-when-used",
+      "productionAndPullRequestPoolsSeparated": true
+    },
+    "security": {
+      "controlIds": ["AS-ENT-SEC-001"],
+      "advancedSecurity": "licensed-and-enabled",
+      "pullRequestStatusCheck": "AdvancedSecurity/NewHighAndCritical",
+      "alertOwnership": "assigned-with-remediation-sla"
+    },
+    "audit": {
+      "controlIds": ["AS-ENT-AUDIT-001", "AS-ENT-EVIDENCE-001"],
+      "azureDevOpsAuditEnabled": true,
+      "externalRetention": "stream-or-export",
+      "minimumEvidenceRetentionDays": 90,
+      "remoteAuditEvidenceRequired": true
+    }
+  }
+}

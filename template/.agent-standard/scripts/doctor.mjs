@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, isAbsolute, relative as relativePath, resolve, sep } from 'node:path'
 
 const root = resolve(process.env.AGENT_STANDARD_ROOT || process.cwd())
@@ -353,9 +353,14 @@ function checkManagedConfiguration (manifest) {
   if (!manifest.qualityGate?.ci || !existsSync(pipelinePath) || (setup && manifest.project?.mode === 'adopt')) return
   const pipeline = readFileSync(pipelinePath, 'utf8')
   if (!/^pr:\s*none\s*$/m.test(pipeline)) note('azure-pipelines.yml must disable unsupported Azure Repos YAML PR triggers')
+  if (!/^\s*batch:\s*true\s*$/m.test(pipeline)) note('azure-pipelines.yml must batch protected-branch CI updates')
   if (manifest.platform.pipelineMode === 'standalone') {
     for (const required of [
       'fetchDepth: 0',
+      'fetchTags: false',
+      'persistCredentials: false',
+      'timeoutInMinutes: 30',
+      'clean: all',
       'node .agent-standard/scripts/verify.mjs',
       'node .agent-standard/scripts/dod.mjs --ci --policy-only',
       'DOD_BASE: HEAD^1',
@@ -378,6 +383,61 @@ function checkManagedConfiguration (manifest) {
     if (template && typeof template.repository === 'string' && typeof template.path === 'string' && /^[a-f0-9]{40}$/.test(template.ref || '') && !/^0{40}$/.test(template.ref)) {
       for (const required of ['extends:', template.repository, template.ref, `${template.path}@agent_standard_templates`]) {
         if (!pipeline.includes(required)) note(`azure-pipelines.yml is missing extends contract value ${required}`)
+      }
+    }
+  }
+}
+
+function checkGateCommands (manifest, gate) {
+  // The rendered gate references npm scripts that only exist in a greenfield
+  // package.json. On adoption the team must map them to the repository's real
+  // commands; catch a missed mapping with an actionable message instead of npm's
+  // opaque "Missing script" at first verify/CI. Deferred to a setup advisory so
+  // it never fails the initial bootstrap, then enforced by normal verification.
+  if (!gate) return
+  const packagePath = resolve(root, 'package.json')
+  if (!existsSync(packagePath)) return
+  let scripts
+  try { const text = readFileSync(packagePath, 'utf8'); scripts = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).scripts || {} } catch { return }
+  const deferred = setup && manifest.project?.mode === 'adopt'
+  for (const key of ['unitCommand', 'fullCommand']) {
+    const command = gate[key]
+    if (typeof command !== 'string') continue
+    for (const match of command.matchAll(/\bnpm run ([A-Za-z0-9:_-]+)/g)) {
+      const script = match[1]
+      if (script in scripts) continue
+      const message = `gate.${key} runs \`npm run ${script}\`, but package.json defines no ${script} script; map .agent-standard/gate.json to this repository's real command`
+      if (deferred) console.warn(`[agent-standard setup] ${message}.`)
+      else note(`${message}.`)
+    }
+  }
+}
+
+function checkOrphanSkills (manifest) {
+  // sync-skills prunes stale copies, but a repository can drift if it was not
+  // re-run after a skill was removed or renamed. Flag any copy this standard
+  // previously placed that is no longer a current skill.
+  const path = resolve(root, '.agent-standard/managed-skills.json')
+  if (!existsSync(path)) return
+  let tracker
+  try { const text = readFileSync(path, 'utf8'); tracker = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text) } catch { note('.agent-standard/managed-skills.json is invalid JSON'); return }
+  // Orphan condition mirrors sync-skills' own prune: recorded, still on disk, and
+  // no longer a source skill. Union the manifest with the actual .ruler/skills
+  // listing so a team-added skill that is not yet declared is never mis-flagged.
+  const current = new Set(manifest.skills || [])
+  const source = resolve(root, '.ruler/skills')
+  if (existsSync(source)) {
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (entry.isDirectory() && existsSync(resolve(source, entry.name, 'SKILL.md'))) current.add(entry.name)
+    }
+  }
+  const knownTargets = ['.claude/skills', '.agents/skills', '.github/skills']
+  for (const target of tracker.targets || []) {
+    if (!knownTargets.includes(target)) continue
+    for (const name of tracker.skills || []) {
+      const relative = `${target}/${name}/SKILL.md`
+      if (!current.has(name) && existsSync(resolve(root, relative))) {
+        note(`${relative} is an orphaned standard skill; run .agent-standard/scripts/sync-skills.mjs to prune it`)
       }
     }
   }
@@ -408,6 +468,7 @@ function main () {
     required.push(
       '.agent-standard/platforms/azure-devops.json',
       '.agent-standard/platforms/azure-devops.schema.json',
+      '.agent-standard/evidence/azure-devops-audit.schema.json',
       '.agent-standard/scripts/audit-azure-devops.mjs',
       '.azuredevops/pull_request_template.md'
     )
@@ -421,9 +482,11 @@ function main () {
   }
   checkSkills(manifest.skills)
   checkPropagatedSkills(manifest)
+  checkOrphanSkills(manifest)
   checkWorkflowArtifacts(manifest)
   checkToolchain(manifest)
   checkManagedConfiguration(manifest)
+  checkGateCommands(manifest, gate)
   // Existing governed documents are deliberately preserved during adoption.
   // Bootstrap may therefore complete before a team adds standard metadata or
   // repairs legacy links; the normal verification command still enforces both.

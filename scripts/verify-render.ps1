@@ -18,6 +18,9 @@ $ErrorActionPreference = 'Stop'
 $sourceRoot = (Resolve-Path '.').Path
 $npmCommand = if ($env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
 $npxCommand = if ($env:OS -eq 'Windows_NT') { 'npx.cmd' } else { 'npx' }
+$copierTool = 'copier==9.17.2'
+$jsonSchemaTool = 'check-jsonschema==0.38.0'
+$yamlLintTool = 'yamllint==1.38.0'
 $standardRevision = if ($SourceRef -match '^[0-9a-f]{40}$') { $SourceRef.ToLowerInvariant() } else { 'development' }
 
 foreach ($examplePath in $Example) {
@@ -67,7 +70,7 @@ foreach ($examplePath in $Example) {
       & node (Join-Path $sourceRoot 'bin/agent-standard.mjs') init $renderRoot --source $sourceRoot --ref $SourceRef --development --apply --name catalog-service --stack ts-node --owner '@example/catalog' --architecture service-based
       if ($LASTEXITCODE -ne 0) { throw "Transactional init failed for $examplePath" }
     } else {
-      & uvx copier copy --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision" --data-file (Join-Path $sourceRoot $examplePath) $sourceRoot $renderRoot
+      & uvx --from $copierTool copier copy --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision" --data-file (Join-Path $sourceRoot $examplePath) $sourceRoot $renderRoot
       if ($LASTEXITCODE -ne 0) { throw "Copier render failed for $examplePath" }
     }
     Push-Location $renderRoot
@@ -111,6 +114,7 @@ foreach ($examplePath in $Example) {
         foreach ($required in @(
           '.agent-standard/platforms/azure-devops.json',
           '.agent-standard/platforms/azure-devops.schema.json',
+          '.agent-standard/evidence/azure-devops-audit.schema.json',
           '.agent-standard/scripts/audit-azure-devops.mjs',
           '.azuredevops/pull_request_template.md',
           'azure-pipelines.yml'
@@ -133,12 +137,16 @@ foreach ($examplePath in $Example) {
         if (-not $adapter.branchPolicies.securityStatusCheck.required -or $adapter.branchPolicies.securityStatusCheck.genre -ne 'AdvancedSecurity' -or $adapter.branchPolicies.securityStatusCheck.name -ne 'NewHighAndCritical') { throw 'Azure DevOps adapter is missing the default Advanced Security merge gate' }
         $pipeline = Get-Content -Raw -Encoding utf8 'azure-pipelines.yml'
         if ($pipeline -notmatch '(?m)^pr:\s*none\s*$') { throw 'Azure Pipeline did not disable unsupported Azure Repos YAML PR triggers' }
+        if (-not $pipeline.Contains('batch: true')) { throw 'Azure Pipeline hardening contract is missing batch: true' }
         if ($isAzureExtends) {
           if ($adapter.pipeline.mode -ne 'extends') { throw 'Azure DevOps extends answer did not reach the adapter manifest' }
           foreach ($contract in @('extends:', 'PlatformEngineering/secure-pipelines', '0123456789abcdef0123456789abcdef01234567', 'templates/agent-standard.yml@agent_standard_templates')) {
             if (-not $pipeline.Contains($contract)) { throw "Azure Pipeline extends contract is missing $contract" }
           }
         } else {
+          foreach ($hardening in @('timeoutInMinutes: 30', 'fetchTags: false', 'persistCredentials: false', 'clean: all')) {
+            if (-not $pipeline.Contains($hardening)) { throw "Azure Pipeline hardening contract is missing $hardening" }
+          }
           if ($adapter.pipeline.mode -ne 'standalone') { throw 'Azure DevOps standalone default did not reach the adapter manifest' }
           foreach ($contract in @('fetchDepth: 0', 'node .agent-standard/scripts/verify.mjs', 'node .agent-standard/scripts/dod.mjs --ci --policy-only', 'PublishPipelineArtifact@1')) {
             if (-not $pipeline.Contains($contract)) { throw "Standalone Azure Pipeline is missing $contract" }
@@ -149,6 +157,7 @@ foreach ($examplePath in $Example) {
       } else {
         foreach ($azureOnly in @(
           '.agent-standard/platforms/azure-devops.json',
+          '.agent-standard/evidence/azure-devops-audit.schema.json',
           '.agent-standard/scripts/audit-azure-devops.mjs',
           '.azuredevops/pull_request_template.md',
           'azure-pipelines.yml'
@@ -157,14 +166,16 @@ foreach ($examplePath in $Example) {
         }
       }
 
-      & uvx check-jsonschema --schemafile '.agent-standard/manifest.schema.json' '.agent-standard/manifest.json'
+      & uv run --no-project --with $jsonSchemaTool python -m check_jsonschema --schemafile '.agent-standard/manifest.schema.json' '.agent-standard/manifest.json'
       if ($LASTEXITCODE -ne 0) { throw "Rendered manifest schema validation failed for $examplePath" }
       $identity = Get-Content -Raw -Encoding utf8 '.agent-standard/manifest.json' | ConvertFrom-Json
       if ($identity.standardVersion -ne '1.0.0' -or $identity.standardRevision -ne $standardRevision) { throw "Rendered manifest identity is invalid for $examplePath" }
       if ($isAzureDevOps) {
-        & uvx check-jsonschema --schemafile '.agent-standard/platforms/azure-devops.schema.json' '.agent-standard/platforms/azure-devops.json'
+        & uv run --no-project --with $jsonSchemaTool python -m check_jsonschema --schemafile '.agent-standard/platforms/azure-devops.schema.json' '.agent-standard/platforms/azure-devops.json'
         if ($LASTEXITCODE -ne 0) { throw "Azure DevOps adapter schema validation failed for $examplePath" }
-        & uvx yamllint -d relaxed 'azure-pipelines.yml'
+        & uv run --no-project --with $jsonSchemaTool python -m check_jsonschema --check-metaschema '.agent-standard/evidence/azure-devops-audit.schema.json'
+        if ($LASTEXITCODE -ne 0) { throw "Azure DevOps evidence schema is invalid for $examplePath" }
+        & uv run --no-project --with $yamlLintTool python -m yamllint -d relaxed 'azure-pipelines.yml'
         if ($LASTEXITCODE -ne 0) { throw "Azure Pipeline YAML validation failed for $examplePath" }
       }
 
@@ -192,12 +203,24 @@ foreach ($examplePath in $Example) {
       }
 
       if ($UpdateRoundTrip) {
-        & uvx copier update --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision"
+        & uvx --from $copierTool copier update --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision"
         if ($LASTEXITCODE -ne 0) { throw "Copier update failed for $examplePath" }
         & node .agent-standard/scripts/verify.mjs
         if ($LASTEXITCODE -ne 0) { throw "manifest verification failed after Copier update for $examplePath" }
-        $updateStatus = & git status --porcelain=v1 --untracked-files=all
-        if ($LASTEXITCODE -ne 0 -or $updateStatus) { throw "Copier update was not idempotent for $examplePath`n$updateStatus" }
+        & git diff --quiet --no-ext-diff --
+        $worktreeDiff = $LASTEXITCODE
+        & git diff --cached --quiet --no-ext-diff --
+        $indexDiff = $LASTEXITCODE
+        $untracked = @(& git ls-files --others --exclude-standard)
+        $untrackedExit = $LASTEXITCODE
+        if ($worktreeDiff -ne 0 -or $indexDiff -ne 0 -or $untrackedExit -ne 0 -or $untracked.Count -gt 0) {
+          $details = @(
+            & git diff --name-status --
+            & git diff --cached --name-status --
+            $untracked | ForEach-Object { "?`t$_" }
+          )
+          throw "Copier update was not content-idempotent for $examplePath`n$($details -join "`n")"
+        }
       }
     } finally {
       Pop-Location

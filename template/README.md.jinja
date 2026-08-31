@@ -58,9 +58,7 @@ The manifest keeps local results separate from remotely audited enforcement, so 
 ## Updating the standard
 
 ```bash
-copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>
+npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard update . --ref <FULL_SHA> --dry-run
 ```
 
-After an update, reinstall dependencies, refresh the SBOM, run the manifest verification
-command, and commit the generated agent files. They are intentionally tracked so a fresh
-clone receives the same instructions and skills.
+On PowerShell, use `npx.cmd` and quote the `--package=...#<FULL_SHA>` argument. Review the dry-run inventory, rerun without `--dry-run`, reinstall dependencies when manifests change, refresh the SBOM, run `agent-standard verify`, and commit the generated agent files. They are intentionally tracked so a fresh clone receives the same instructions and skills.

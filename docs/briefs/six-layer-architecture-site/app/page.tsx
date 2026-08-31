@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 
 type TabId = "system" | "layers" | "capabilities" | "workflow" | "value" | "risks" | "presenter";
 
@@ -101,23 +101,44 @@ const artifacts = [
 
 const executiveSummary = "Agent Standard is a six-layer operating model for governed AI-assisted engineering. Layer 1 establishes an immutable, deterministic repository baseline that assesses and adopts supported repositories without silently overwriting project-owned content. Later layers add approved profiles, repository context, explicit precedence, adoption assessment and governed exceptions. The recommended adoption approach is a small representative pilot with baseline measures, transparent evidence and a pre-agreed continue, adjust or stop decision.";
 
-function TabButton({ id, label, active, onSelect }: { id: TabId; label: string; active: boolean; onSelect: (id: TabId) => void }) {
-  return <button id={`tab-${id}`} className="tab-button" role="tab" aria-selected={active} aria-controls={`panel-${id}`} tabIndex={active ? 0 : -1} onClick={() => onSelect(id)}>{label}</button>;
+type TabSelectionOptions = { focus?: boolean; scroll?: boolean };
+type SelectTab = (id: TabId, options?: TabSelectionOptions) => void;
+
+function TabButton({ id, label, active, onSelect }: { id: TabId; label: string; active: boolean; onSelect: SelectTab }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const current = tabs.findIndex((tab) => tab.id === id);
+    let next = current;
+    if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") next = (current - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+
+    event.preventDefault();
+    onSelect(tabs[next].id, { focus: true, scroll: false });
+  };
+
+  return <button id={`tab-${id}`} className="tab-button" role="tab" aria-selected={active} aria-controls={`panel-${id}`} tabIndex={active ? 0 : -1} onClick={() => onSelect(id)} onKeyDown={handleKeyDown}>{label}</button>;
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>(() => {
-    if (typeof window === "undefined") return "system";
-    const hash = window.location.hash.replace("#", "") as TabId;
-    return tabIds.has(hash) ? hash : "system";
-  });
+  const [activeTab, setActiveTab] = useState<TabId>("system");
   const [expandedLayer, setExpandedLayer] = useState(0);
   const [copyState, setCopyState] = useState("Copy executive summary");
 
-  const selectTab = (id: TabId) => {
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "") as TabId;
+    if (!tabIds.has(hash)) return;
+
+    const frame = window.requestAnimationFrame(() => setActiveTab(hash));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const selectTab: SelectTab = (id, { focus = false, scroll = true } = {}) => {
     setActiveTab(id);
     window.history.replaceState(null, "", `#${id}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (focus) window.requestAnimationFrame(() => document.getElementById(`tab-${id}`)?.focus());
+    if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const copySummary = async () => {

@@ -1,6 +1,7 @@
 @{
   DefaultArchitecture = 'service-based'
   DefaultWorkflow = 'lightweight'
-  PolicyUrl = '../docs/conformance.md'
-  SupportContact = 'agent-standard maintainers'
+  PolicyRepository = 'https://github.com/landphieran/agent-standard'
+  PolicyPath = 'docs/conformance.md'
+  SupportContact = 'https://github.com/landphieran/agent-standard/issues'
 }

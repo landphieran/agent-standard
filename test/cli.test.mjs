@@ -14,7 +14,9 @@ import {
   detectRepositoryPlatform,
   ownershipBlockers,
   snapshotPaths,
-  snapshotsEqual
+  snapshotsEqual,
+  TOOL_VERSIONS,
+  uvxToolArgs
 } from '../bin/agent-standard.mjs'
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -73,6 +75,14 @@ test('npm and uv toolchains pass the minimum-standard preflight', t => {
   assert.doesNotThrow(() => assertSupportedToolchain(uvRoot, 'py-fastapi'))
 })
 
+const BIN = join(REPO, 'bin', 'agent-standard.mjs')
+
+test('Copier execution is pinned to the reviewed bootstrap version', () => {
+  assert.equal(TOOL_VERSIONS.copier, '9.17.2')
+  assert.deepEqual(uvxToolArgs('copier', ['copy']), ['--from', 'copier==9.17.2', 'copier', 'copy'])
+  assert.throws(() => uvxToolArgs('unknown'), /unsupported uvx tool/)
+})
+
 test('repository platform detection recognizes Azure DevOps and permits an explicit override', t => {
   const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-platform-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -84,8 +94,51 @@ test('repository platform detection recognizes Azure DevOps and permits an expli
   assert.equal(detectRepositoryPlatform(root, 'github'), 'github')
   assert.throws(() => detectRepositoryPlatform(root, 'gitlab'), /unsupported repository platform/)
 
+  git(['remote', 'set-url', 'origin', 'git@ssh.dev.azure.com:v3/acme/platform/service'])
+  assert.equal(detectRepositoryPlatform(root), 'azure-devops')
+
   git(['remote', 'set-url', 'origin', 'git@github.com:acme/service.git'])
   assert.equal(detectRepositoryPlatform(root), 'github')
+})
+
+test('verify fails with a clear error outside an agent-standard repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-verify-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'verify', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /not an agent-standard repository/)
+})
+
+test('update requires a Git repository', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-update-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const r = spawnSync(process.execPath, [BIN, 'update', root], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /Git repository/)
+})
+
+test('release updates require a full immutable revision', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-update-ref-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const git = args => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+  git(['init', '-q'])
+  git(['config', 'user.email', 'agent-standard@example.invalid'])
+  git(['config', 'user.name', 'agent-standard verifier'])
+  write(root, '.agent-standard/copier-answers.yml', '_src_path: fixture\n')
+  git(['add', '-A'])
+  git(['commit', '-qm', 'fixture'])
+
+  const result = spawnSync(process.execPath, [BIN, 'update', root, '--ref', 'main', '--dry-run'], { encoding: 'utf8' })
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /full 40-character Git commit SHA/)
+})
+
+test('help lists the update, verify, and doctor verbs', () => {
+  const r = spawnSync(process.execPath, [BIN, '--help'], { encoding: 'utf8' })
+  assert.equal(r.status, 0)
+  for (const verb of ['agent-standard init', 'agent-standard update', 'agent-standard verify', 'agent-standard doctor']) {
+    assert.match(r.stdout, new RegExp(verb.replace(/[-]/g, '\\$&')))
+  }
 })
 
 test('the npm-installed bin entry point executes through its package shim', () => {

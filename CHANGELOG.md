@@ -10,7 +10,8 @@ This file records product releases independently from manifest schema revisions.
 - Made `init` assessment-first, required `--apply` for non-interactive mutation, allowed dirty/missing-decision assessments, and added stable exit meanings.
 - Added full revision identity, collision classification across generated and agent-owned paths, apply-time drift checks, and partial-copy failure rollback proof.
 - Published the Layer 1 control catalog, supported host boundary, Git recovery procedure, nine-configuration render matrix, and separate core/pilot gates.
-
+- Reconciled the Azure adapter with the hardened day-two CLI, made CI change detection preserve both root-commit and merge-base behavior, replaced the Windows-incompatible Azure CLI policy query with token-safe REST access, and recognized Azure DevOps SSH remotes.
+- Added a machine-readable Azure DevOps enterprise baseline, enterprise rollout/control guidance, schema-versioned remote-audit evidence, and explicit Azure Pipeline workspace/credential hardening.
 - Added an Azure DevOps adapter with origin detection, provider-isolated review metadata, standalone and immutable central-template Azure Pipeline modes, Advanced Security expectations, SBOM publication, and a read-only remote-policy auditor.
 - Renamed the pre-release ownership contract from GitHub-specific `codeowners` to portable `owners`; the GitHub adapter still derives CODEOWNERS from it.
 - Added a transactional `agent-standard init` path with project/stack detection, explicit ownership, verified staging, dry-run plans, namespaced Copier state, collision preservation, rollback, and fail-closed package-manager checks.

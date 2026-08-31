@@ -39,6 +39,9 @@ test("keeps the site self-contained and accessible", async () => {
 
   assert.match(page, /role="tablist"/);
   assert.match(page, /aria-selected=\{active\}/);
+  assert.match(page, /onKeyDown=\{handleKeyDown\}/);
+  for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) assert.match(page, new RegExp(`event\\.key === "${key}"`));
+  assert.match(page, /requestAnimationFrame\(\(\) => document\.getElementById\(`tab-\$\{id\}`\)\?\.focus\(\)\)/);
   assert.match(page, /aria-expanded=\{open\}/);
   assert.match(page, /Print \/ save as PDF/);
   assert.match(page, /continue, adjust or stop/i);

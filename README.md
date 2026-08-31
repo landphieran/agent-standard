@@ -18,7 +18,16 @@ The default path is intentionally small: `agent-standard init` assesses first, s
 
 ## Recommended setup
 
-Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for isolated Copier execution. Replace `<FULL_SHA>` below with one published 40-character commit SHA. The same SHA pins both the executing package and the Copier template:
+Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for isolated, version-pinned Copier execution. Replace `<FULL_SHA>` below with one published 40-character commit SHA. The same SHA pins both the executing package and the Copier template.
+
+PowerShell 7 on Windows:
+
+```powershell
+npx.cmd --yes "--package=github:landphieran/agent-standard#<FULL_SHA>" -- agent-standard init ./my-service `
+  --ref <FULL_SHA> --owner '@acme/platform' --architecture service-based
+```
+
+Bash on Ubuntu:
 
 ```bash
 npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init ./my-service \
@@ -27,16 +36,11 @@ npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standa
 
 That command is assessment-only. It may run against a dirty repository and reports missing decisions or unsafe collisions without changing the destination. Review the plan, make the worktree clean, then add `--apply`; non-interactive mutation is impossible without that flag.
 
-For an existing repository, run the same command at its root. The installer infers its name, stack, adoption mode, and GitHub/Azure DevOps provider; ownership and architecture remain explicit choices:
-
-```bash
-npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init . \
-  --ref <FULL_SHA> --owner '@acme/platform' --architecture service-based
-```
+For an existing repository, use `.` instead of `./my-service`. The installer infers its name, stack, adoption mode, and GitHub/Azure DevOps provider; ownership and architecture remain explicit choices.
 
 Use `--dry-run` to force no-mutation behavior, `--scm azure-devops` when a new Azure Repos project has no origin yet, `--workflow spec-driven` for OpenSpec, or `--advanced` to select existing advanced controls. `--development` is the only mode that permits `HEAD`, a branch, or a local mutable template and records the manifest revision as `development`. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable finding instead of silently weakening SBOM accuracy.
 
-See [the adoption runbook](docs/runbook.md) for the full procedure and the lower-level Copier escape hatch.
+See [the adoption runbook](docs/runbook.md) for the full procedure and safe update flow.
 
 ## Standard profile
 
@@ -66,12 +70,13 @@ The render matrix exercises every supported stack in greenfield and adoption mod
 - [Supply-chain standard](docs/supply-chain.md)
 - [GitHub enforcement](docs/github-hardening.md)
 - [Azure DevOps adapter](docs/azure-devops.md)
+- [Enterprise adoption and remaining controls](docs/enterprise-adoption.md)
 - [Azure DevOps enterprise template module](modules/azure-devops/README.md)
 - [Further standardization roadmap](docs/roadmap.md)
 - [Rendered examples](examples/README.md)
 
 ## Version 1 support boundary
 
-The canonical product version is `package.json`; the manifest schema remains independently versioned at schema 1. Stable v1 interfaces are the documented `init` flags and exit meanings, Copier answer names and values, manifest schema, control identifiers, and ownership seams. Exact generated prose, complete file contents, console wording, and internal script structure may change in compatible releases.
+The canonical product version is `package.json`; the manifest schema remains independently versioned at schema 1. Stable v1 interfaces are the documented CLI verbs, flags, and exit meanings; Copier answer names and values; manifest schema; control identifiers; and ownership seams. Exact generated prose, complete file contents, console wording, and internal script structure may change in compatible releases.
 
 Supported adoption hosts are Windows 11 with PowerShell 7 and Ubuntu 24.04 with bash/PowerShell. macOS may work but is not certified for v1. GitHub and Azure DevOps repository settings remain outside the generator boundary and unverified until an authorized administrator applies and audits them.

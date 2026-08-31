@@ -16,7 +16,7 @@ Status: core implementation verified locally; release authorization requires the
 | Proof | Result |
 |---|---|
 | Unit, gate, source, provider, merge, SBOM, skill, recovery, and CLI tests | Passed locally on Windows; includes no-mutation assessment, mutable refs, ownership collisions, destination drift, failure injection, and Git recovery |
-| Source verification | Passed; checks canonical version/revision contract, immutable external references, schema 1, matrix coverage, provider contracts, and root SBOM |
+| Source verification | Passed; checks canonical version/revision contract, exact bootstrap-tool versions, immutable external references, schema 1, matrix coverage, provider contracts, and root SBOM |
 | Render matrix | Passed across nine configurations: every stack × greenfield/adopt, GitHub, Azure standalone/extends, both workflows, both SBOM formats; pairwise remaining settings |
 | Stack-native generated verification | Passed for TypeScript Node, Next.js (unit, browser E2E, production build), and FastAPI |
 | Selected Copier update/idempotence | Passed locally from a clean immutable commit for the GitHub spec-driven and Azure central-template fixtures; release CI reruns against the authorized final SHA |
@@ -32,4 +32,4 @@ Warnings about local CRLF conversion and Copier's dirty-template development ver
 
 ## Explicitly deferred
 
-Separate adopt/update commands, a public SDK, a general organization-profile schema, automated rule migration, persisted plans, transactional Copier update or post-success rollback command, network telemetry/dashboarding, report-format surface, and a deterministic document-publishing system are outside v1.
+A separate automated adoption/migration engine, a public SDK, a general organization-profile schema, automated rule migration, persisted plans, a post-success rollback command, network telemetry/dashboarding, report-format surface, and a deterministic document-publishing system are outside v1.

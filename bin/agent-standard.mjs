@@ -27,6 +27,12 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const standardVersion = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version
 const FULL_SHA = /^[0-9a-f]{40}$/i
 const OWNER = /^@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?(?:\s+@[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?)*$/
+export const TOOL_VERSIONS = Object.freeze({ copier: '9.17.2' })
+export const uvxToolArgs = (tool, args = []) => {
+  const version = TOOL_VERSIONS[tool]
+  if (!version) throw new Error(`unsupported uvx tool: ${tool}`)
+  return ['--from', `${tool}==${version}`, tool, ...args]
+}
 const ARCHITECTURES = ['service-based', 'clean-layered']
 const STANDARD_SKILLS = ['plan-change', 'create-adr', 'maintain-docs', 'self-review', 'security-review']
 const CLIENT_SKILL_ROOTS = ['.agents/skills', '.claude/skills', '.github/skills']
@@ -58,12 +64,15 @@ const MANAGED_TEXT = new Map([
 
 function usage () {
   console.log(`Usage:
-  agent-standard init [path] [options]
+  agent-standard init   [path] --owner @org/team [options]
+  agent-standard update [path] --ref <full-sha> [--dry-run]
+  agent-standard verify [path] [-- passthrough]
+  agent-standard doctor [path] [--json]
 
-The default action is a read-only assessment. In an interactive terminal the
-installer asks before applying; non-interactive mutation requires --apply.
+The default init action is a read-only assessment. In an interactive terminal
+the installer asks before applying; non-interactive mutation requires --apply.
 
-Options:
+init options:
   --source <template>       Copier source (default: gh:landphieran/agent-standard)
   --ref <full-sha>          Immutable template revision (required for release use)
   --development            Permit a mutable/local ref and record development
@@ -76,6 +85,10 @@ Options:
   --advanced                Use the advanced Copier profile with safe defaults
   --apply                   Apply a freshly assessed, blocker-free plan
   --dry-run                 Assess and render only; never change the destination
+
+update applies a template bump through the same staged, atomic, rollback-safe
+transaction as init. Mutable update refs require --development. verify and
+doctor run the repository's own pinned scripts.
 `)
 }
 
@@ -152,7 +165,7 @@ export function detectRepositoryPlatform (root, requested) {
   }
   try {
     const remote = git(root, ['remote', 'get-url', 'origin']).toLowerCase()
-    if (remote.includes('dev.azure.com/') || remote.includes('visualstudio.com/')) return 'azure-devops'
+    if (remote.includes('dev.azure.com') || remote.includes('visualstudio.com/')) return 'azure-devops'
     if (remote.includes('github.com')) return 'github'
   } catch { /* a greenfield destination might not have a Git remote yet */ }
   return 'github'
@@ -622,10 +635,10 @@ async function init () {
           workflow_profile: workflow,
           standard_revision: revision.revision
         }
-        const copierArgs = ['copier', 'copy', '--trust', '--force', '--answers-file', '.agent-standard/copier-answers.yml', '--vcs-ref', revision.ref]
+        const copierArgs = ['copy', '--trust', '--force', '--answers-file', '.agent-standard/copier-answers.yml', '--vcs-ref', revision.ref]
         for (const [key, value] of Object.entries(data)) copierArgs.push('--data', `${key}=${value}`)
         copierArgs.push(source, stage)
-        run('uvx', copierArgs)
+        run('uvx', uvxToolArgs('copier', copierArgs))
 
         const renderedManifest = readJson(join(stage, '.agent-standard/manifest.json'))
         if (renderedManifest.standardVersion !== standardVersion || renderedManifest.standardRevision !== revision.revision) {
@@ -692,6 +705,89 @@ async function init () {
   }
 }
 
+function targetAndRest () {
+  let target = '.'
+  if (cliArgs[0] && !cliArgs[0].startsWith('-')) target = cliArgs.shift()
+  return { target: resolve(target), rest: cliArgs.slice() }
+}
+
+function localScript (target, name) {
+  const path = join(target, '.agent-standard', 'scripts', name)
+  if (!existsSync(path)) {
+    throw new Error(`${target} is not an agent-standard repository (missing .agent-standard/scripts/${name}); run from the repository root or pass its path`)
+  }
+  return path
+}
+
+function passthrough (name) {
+  const { target, rest } = targetAndRest()
+  const result = spawnSync(process.execPath, [localScript(target, name), ...rest], { cwd: target, stdio: 'inherit' })
+  process.exitCode = result.status ?? 1
+}
+
+function update () {
+  const requestedRef = option('--ref')
+  const development = flag('--development')
+  const dryRun = flag('--dry-run')
+  const targetArgument = cliArgs.shift() || '.'
+  if (cliArgs.length) throw new Error(`unexpected arguments: ${cliArgs.join(' ')}`)
+
+  const target = resolve(targetArgument)
+  let repositoryRoot
+  try { repositoryRoot = resolve(git(target, ['rev-parse', '--show-toplevel'])) }
+  catch { throw new Error('update must run inside a Git repository; initialise Git or pass the repository path') }
+  const sameRoot = process.platform === 'win32'
+    ? repositoryRoot.toLowerCase() === target.toLowerCase()
+    : repositoryRoot === target
+  if (!sameRoot) throw new Error('update must target the Git repository root')
+  if (!existsSync(join(target, '.agent-standard', 'copier-answers.yml'))) {
+    throw new Error('no agent-standard answers file found; run "agent-standard init" first')
+  }
+  const revision = assessRevision(requestedRef, development)
+  if (revision.blocker) throw new Error(revision.blocker.message)
+  if (git(target, ['status', '--porcelain'])) throw new Error('update requires a clean worktree; commit or stash current changes')
+  const initialHead = git(target, ['rev-parse', 'HEAD'])
+
+  const tempRoot = mkdtempSync(join(tmpdir(), 'agent-standard-update-'))
+  const stage = join(tempRoot, 'stage')
+  const backup = join(tempRoot, 'backup')
+  let worktree = false
+  try {
+    git(target, ['worktree', 'add', '--detach', stage, 'HEAD'], false)
+    worktree = true
+    run('uvx', uvxToolArgs('copier', [
+      'update', '--trust', '--defaults',
+      '--answers-file', '.agent-standard/copier-answers.yml',
+      '--vcs-ref', revision.ref,
+      '--data', `standard_revision=${revision.revision}`,
+      stage
+    ]))
+
+    const files = changedFiles(stage)
+    console.log(`\nagent-standard update: ${files.length} files`)
+    for (const path of files) console.log(`  ${path}`)
+    if (dryRun) {
+      console.log('\nDry run complete; destination was not changed.')
+      return
+    }
+    if (!files.length) {
+      console.log('\nAlready up to date; nothing to apply.')
+      return
+    }
+    if (git(target, ['status', '--porcelain']) || git(target, ['rev-parse', 'HEAD']) !== initialHead) {
+      throw new Error('destination changed during staging; no files were applied')
+    }
+    copyAtomically(stage, target, files, backup)
+    console.log(`\nUpdated agent-standard in ${target}.`)
+    console.log('Next: review the diff, reinstall if dependency manifests changed, refresh the SBOM, and run "agent-standard verify".')
+  } finally {
+    if (worktree) {
+      try { git(target, ['worktree', 'remove', '--force', stage], false) } catch { console.warn(`warning: remove temporary worktree manually: ${stage}`) }
+    }
+    if (existsSync(tempRoot)) rmSync(tempRoot, { recursive: true, force: true })
+  }
+}
+
 const invokedAsScript = (() => {
   if (!process.argv[1]) return false
   try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch { return false }
@@ -700,10 +796,10 @@ const invokedAsScript = (() => {
 if (invokedAsScript) {
   try {
     if (command === 'init') process.exitCode = await init()
-    else {
-      usage()
-      if (command && !['help', '--help', '-h'].includes(command)) process.exitCode = 1
-    }
+    else if (command === 'update') update()
+    else if (command === 'verify') passthrough('verify.mjs')
+    else if (command === 'doctor') passthrough('doctor.mjs')
+    else { usage(); if (command && !['help', '--help', '-h'].includes(command)) process.exitCode = 1 }
   } catch (error) {
     console.error(`agent-standard: ${error.message}`)
     process.exitCode = 1

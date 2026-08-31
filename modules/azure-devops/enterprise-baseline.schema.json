@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/landphieran/agent-standard/azure-devops-enterprise-baseline.schema.json",
+  "title": "agent-standard Azure DevOps enterprise minimum",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "service", "controlSet", "controls"],
+  "properties": {
+    "$schema": { "const": "./enterprise-baseline.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "service": { "const": "azure-devops-services" },
+    "controlSet": { "const": "agent-standard-enterprise-minimum" },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "pipelineSettings", "pipelineResources", "repositories", "agents", "security", "audit"],
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "entraBackedOrganization", "privateProjects", "productionAutomationUsesFederatedIdentity", "personalAccessTokens"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-ID-001", "AS-ENT-AUTH-001"] },
+            "entraBackedOrganization": { "const": true },
+            "privateProjects": { "const": true },
+            "productionAutomationUsesFederatedIdentity": { "const": true },
+            "personalAccessTokens": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["productionAutomationAllowed", "fullScopeAllowed", "globalAllowed", "maximumLifetimeDays"],
+              "properties": {
+                "productionAutomationAllowed": { "const": false },
+                "fullScopeAllowed": { "const": false },
+                "globalAllowed": { "const": false },
+                "maximumLifetimeDays": { "type": "integer", "minimum": 1, "maximum": 90 }
+              }
+            }
+          }
+        },
+        "pipelineSettings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "limitJobAuthorizationScopeToCurrentProject", "protectAccessToRepositoriesInYamlPipelines", "limitVariablesSetAtQueueTime", "shellTaskArgumentsValidation", "disableClassicBuildPipelineCreation", "disableClassicReleasePipelineCreation", "disableImpliedYamlCiTrigger", "marketplaceTasks"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-PIPE-001", "AS-ENT-PIPE-002"] },
+            "limitJobAuthorizationScopeToCurrentProject": { "const": true },
+            "protectAccessToRepositoriesInYamlPipelines": { "const": true },
+            "limitVariablesSetAtQueueTime": { "const": true },
+            "shellTaskArgumentsValidation": { "const": true },
+            "disableClassicBuildPipelineCreation": { "const": true },
+            "disableClassicReleasePipelineCreation": { "const": true },
+            "disableImpliedYamlCiTrigger": { "const": true },
+            "marketplaceTasks": { "const": "disabled-or-explicitly-approved" }
+          }
+        },
+        "pipelineResources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "authorization", "extendsRequiredTemplateCheck", "serviceConnectionAuthentication", "serviceConnectionAccess"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-RESOURCE-001"] },
+            "authorization": { "const": "explicit-per-pipeline" },
+            "extendsRequiredTemplateCheck": { "const": true },
+            "serviceConnectionAuthentication": { "const": "workload-identity-federation-when-used" },
+            "serviceConnectionAccess": { "const": "explicit-per-pipeline" }
+          }
+        },
+        "repositories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "protectedDefaultBranch", "contributorPolicyBypassAllowed", "contributorForcePushAllowed", "breakGlass"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-REPO-001"] },
+            "protectedDefaultBranch": { "const": true },
+            "contributorPolicyBypassAllowed": { "const": false },
+            "contributorForcePushAllowed": { "const": false },
+            "breakGlass": { "const": "time-bound-and-audited" }
+          }
+        },
+        "agents": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "untrustedPullRequests", "selfHostedAgentState", "productionAndPullRequestPoolsSeparated"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-AGENT-001"] },
+            "untrustedPullRequests": { "const": "ephemeral-isolated" },
+            "selfHostedAgentState": { "const": "stateless-when-used" },
+            "productionAndPullRequestPoolsSeparated": { "const": true }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "advancedSecurity", "pullRequestStatusCheck", "alertOwnership"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-SEC-001"] },
+            "advancedSecurity": { "const": "licensed-and-enabled" },
+            "pullRequestStatusCheck": { "const": "AdvancedSecurity/NewHighAndCritical" },
+            "alertOwnership": { "const": "assigned-with-remediation-sla" }
+          }
+        },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["controlIds", "azureDevOpsAuditEnabled", "externalRetention", "minimumEvidenceRetentionDays", "remoteAuditEvidenceRequired"],
+          "properties": {
+            "controlIds": { "const": ["AS-ENT-AUDIT-001", "AS-ENT-EVIDENCE-001"] },
+            "azureDevOpsAuditEnabled": { "const": true },
+            "externalRetention": { "const": "stream-or-export" },
+            "minimumEvidenceRetentionDays": { "type": "integer", "minimum": 90 },
+            "remoteAuditEvidenceRequired": { "const": true }
+          }
+        }
+      }
+    }
+  }
+}

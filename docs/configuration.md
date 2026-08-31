@@ -1,6 +1,6 @@
 # Configuration reference
 
-Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collisions with other Copier templates in the same repository. Reuse it with `copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>` so the rendered manifest records the same immutable revision Copier used.
+Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collisions with other Copier templates in the same repository. `agent-standard update . --ref <FULL_SHA> --dry-run` reuses that file through a pinned Copier runtime and records the same immutable revision used to render the update.
 
 ## Setup profiles
 
@@ -67,8 +67,8 @@ A waiver applies only while unexpired and only when every changed source path ma
 
 ## Adoption ownership boundary
 
-Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the provider-appropriate delimited ownership/review blocks plus the exact Claude hook command. Supported team adoption uses the assessment-first CLI to protect the wider generated-path boundary. Future updates use Copier’s three-way merge and must be reviewed like source changes.
+Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the provider-appropriate delimited ownership/review blocks plus the exact Claude hook command. Supported team adoption uses the assessment-first CLI to protect the wider generated-path boundary. Future updates use the CLI's staged Copier three-way merge and must be reviewed like source changes.
 
 Azure DevOps implementation and one-time administrator steps are documented in [azure-devops.md](azure-devops.md). Azure workload deployment configuration is intentionally a separate future profile; choosing Azure Repos must not silently introduce subscriptions, service connections, or cloud resources.
 
-The rendered Azure adapter starts with `pipeline.definitionId: null` because Azure assigns that ID only after pipeline creation. Recording the assigned positive ID is the one intentional post-create configuration step; the remote auditor then proves that the blocking branch policy points to that exact pipeline rather than merely any successful build.
+The rendered Azure adapter starts with `pipeline.definitionId: null` because Azure assigns that ID only after pipeline creation. Recording the assigned positive ID is the one intentional post-create configuration step; the remote auditor then proves that the blocking branch policy points to that exact pipeline rather than merely any successful build. Enterprise-wide settings are not additional Copier questions: platform administrators apply the fixed reference contract in `modules/azure-devops/enterprise-baseline.json`, and an organization wrapper supplies company-specific coordinates.

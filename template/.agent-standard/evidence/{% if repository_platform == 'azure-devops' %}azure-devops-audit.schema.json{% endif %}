@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/landphieran/agent-standard/azure-devops-audit.schema.json",
+  "title": "agent-standard Azure DevOps remote audit evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidenceType",
+    "schemaVersion",
+    "provider",
+    "standardVersion",
+    "evaluationMode",
+    "configurationSha256",
+    "sourceRevision",
+    "scope",
+    "targetBranch",
+    "evaluatedAt",
+    "ok",
+    "controls"
+  ],
+  "properties": {
+    "evidenceType": { "const": "agent-standard/azure-devops-remote-audit" },
+    "schemaVersion": { "const": 1 },
+    "provider": { "const": "azure-devops" },
+    "standardVersion": { "type": "string", "minLength": 1 },
+    "evaluationMode": { "enum": ["live", "offline", "mixed"] },
+    "configurationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sourceRevision": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organization", "project", "repository"],
+      "properties": {
+        "organization": { "type": ["string", "null"] },
+        "project": { "type": ["string", "null"] },
+        "repository": { "type": ["string", "null"] }
+      }
+    },
+    "targetBranch": { "type": "string", "minLength": 1 },
+    "evaluatedAt": { "type": "string", "format": "date-time" },
+    "ok": { "type": "boolean" },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "detail"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^AS-ADO-[A-Z]+-[0-9]{3}$" },
+          "status": { "enum": ["pass", "fail"] },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

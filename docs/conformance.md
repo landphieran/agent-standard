@@ -44,4 +44,6 @@ Control identifiers and outcomes are stable v1 interfaces. **Non-waivable** cont
 | AS-REMOTE-001 | Pull requests, required jobs, owner review, and security features are enforced | Authorized provider administrators | Hosted repositories | Non-waivable external gate | Authorized provider audit; Azure emits `AS-ADO-*` results |
 | AS-PROV-001 | A released subject carries verifiable build/SBOM provenance | Release owner | Opt-in release profile | Configurable | Release workflow and consumer verification |
 
-The catalog defines outcomes and evidence, not a network telemetry system. V1 evidence remains in the repository, CI run, release evidence note, and authorized provider audit.
+The catalog defines outcomes and evidence, not a network telemetry system. V1 evidence remains in the repository, CI run, release evidence note, and authorized provider audit. Azure `AS-ADO-*` results are schema-versioned and bound to the audited standard revision.
+
+`AS-ENT-*` controls in the Azure enterprise baseline are an organization overlay. A repository may satisfy the portable AS-3 contract while enterprise admission remains pending; an enterprise should not label it conformant until the applicable identity, pipeline, resource, permission, agent, audit, and evidence controls are also approved.

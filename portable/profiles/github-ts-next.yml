@@ -1,0 +1,19 @@
+setup_profile: advanced
+project_name: web-portal
+language_stack: ts-next
+mode: greenfield
+repository_platform: github
+owners: "@example/platform"
+architecture: service-based
+topology: modular-monolith
+workflow_profile: lightweight
+gate: strict
+agents:
+  - claude
+  - codex
+  - copilot
+ci: true
+bom_format: cyclonedx-json
+bom_gate: strict
+security_profile: hardened
+release_attestations: false

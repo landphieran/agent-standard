@@ -42,6 +42,14 @@ Use `--dry-run` to force no-mutation behavior, `--scm azure-devops` when a new A
 
 See [the adoption runbook](docs/runbook.md) for the full procedure and safe update flow.
 
+## Portable static distribution
+
+For teams that may use only Git, Node/npm, and Python/pip, the companion
+portable release provides six ready-to-copy greenfield repositories. It has no
+initializer or automated update path; teams select a host/stack starter,
+review it, and commit it to an empty repository. See the
+[portable-distribution guide](docs/portable-distribution.md).
+
 ## Standard profile
 
 The paved path defaults to a lightweight planning workflow, strict local and CI gates, all supported agent clients, a strict CycloneDX SBOM, hardened security automation, and no release workflow. GitHub origins receive GitHub Actions controls; Azure Repos origins receive the Azure DevOps adapter and a standalone Azure Pipeline. Greenfield users also choose an architecture; adoption preserves existing application and documentation files.
@@ -66,6 +74,7 @@ The render matrix exercises every supported stack in greenfield and adoption mod
 - [Adoption and update runbook](docs/runbook.md)
 - [Conformance levels and states](docs/conformance.md)
 - [Version 1 release evidence](docs/release-evidence-v1.0.0.md)
+- [Portable static distribution](docs/portable-distribution.md)
 - [Business six-layer architecture brief](docs/briefs/agent-standard-six-layer-enterprise-architecture.docx)
 - [Supply-chain standard](docs/supply-chain.md)
 - [GitHub enforcement](docs/github-hardening.md)

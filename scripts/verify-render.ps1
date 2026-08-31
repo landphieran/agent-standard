@@ -6,7 +6,9 @@ param(
     'examples/3-ts-next-clean-strict.yml',
     'examples/4-py-fastapi-clean-strict.yml',
     'examples/5-ts-node-azure-devops-standard.yml',
-    'examples/6-ts-node-azure-devops-extends.yml'
+    'examples/6-ts-node-azure-devops-extends.yml',
+    'examples/7-ts-node-adopt.yml',
+    'examples/8-ts-next-adopt.yml'
   ),
   [string]$SourceRef = 'HEAD',
   [switch]$UpdateRoundTrip
@@ -16,6 +18,7 @@ $ErrorActionPreference = 'Stop'
 $sourceRoot = (Resolve-Path '.').Path
 $npmCommand = if ($env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
 $npxCommand = if ($env:OS -eq 'Windows_NT') { 'npx.cmd' } else { 'npx' }
+$standardRevision = if ($SourceRef -match '^[0-9a-f]{40}$') { $SourceRef.ToLowerInvariant() } else { 'development' }
 
 foreach ($examplePath in $Example) {
   $renderRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("agent-standard-render-" + [guid]::NewGuid().ToString('N'))
@@ -27,9 +30,32 @@ foreach ($examplePath in $Example) {
     $isAzureDevOps = $answerText -match '(?m)^repository_platform:\s*azure-devops\s*$'
     $isAzureExtends = $answerText -match '(?m)^azure_pipeline_mode:\s*extends\s*$'
     $isHardened = -not ($answerText -match '(?m)^security_profile:\s*baseline\s*$')
+    $stack = [regex]::Match($answerText, '(?m)^language_stack:\s*([^\s]+)\s*$').Groups[1].Value
     if ($isAdopt) {
       $fixtureRoot = Join-Path $sourceRoot 'test/fixtures/adopt-py-fastapi'
       Get-ChildItem -LiteralPath $fixtureRoot -Force | Copy-Item -Destination $renderRoot -Recurse -Force
+      if ($stack -in @('ts-node', 'ts-next')) {
+        foreach ($pythonPath in @('pyproject.toml', 'src', 'tests')) {
+          $candidate = Join-Path $renderRoot $pythonPath
+          if (Test-Path -LiteralPath $candidate) { Remove-Item -LiteralPath $candidate -Recurse -Force }
+        }
+        $package = @{
+          name = if ($stack -eq 'ts-next') { 'existing-web-app' } else { 'existing-node-service' }
+          version = '1.0.0'
+          private = $true
+          type = 'module'
+          packageManager = 'npm@11.0.0'
+          scripts = @{
+            'test:unit' = 'node --test'
+            'verify:code' = 'node --test'
+            'sbom' = 'node .agent-standard/scripts/sbom.mjs --write'
+          }
+        } | ConvertTo-Json -Depth 4
+        [System.IO.File]::WriteAllText((Join-Path $renderRoot 'package.json'), "$package`n", [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $renderRoot 'existing.test.mjs'), "import { test } from 'node:test'`nimport assert from 'node:assert/strict'`ntest('existing project', () => assert.equal(1, 1))`n", [System.Text.UTF8Encoding]::new($false))
+        $dependabot = "# existing-dependabot-policy`nversion: 2`nupdates:`n  - package-ecosystem: npm`n    directory: /`n    schedule:`n      interval: weekly`n  - package-ecosystem: github-actions`n    directory: /`n    schedule:`n      interval: weekly`n"
+        [System.IO.File]::WriteAllText((Join-Path $renderRoot '.github/dependabot.yml'), $dependabot, [System.Text.UTF8Encoding]::new($false))
+      }
       & git -C $renderRoot init --quiet
       & git -C $renderRoot config user.email 'agent-standard@example.invalid'
       & git -C $renderRoot config user.name 'agent-standard verifier'
@@ -38,10 +64,10 @@ foreach ($examplePath in $Example) {
     }
 
     if ($isPavedPath) {
-      & node (Join-Path $sourceRoot 'bin/agent-standard.mjs') init $renderRoot --source $sourceRoot --ref $SourceRef --name catalog-service --stack ts-node --owner '@example/catalog'
+      & node (Join-Path $sourceRoot 'bin/agent-standard.mjs') init $renderRoot --source $sourceRoot --ref $SourceRef --development --apply --name catalog-service --stack ts-node --owner '@example/catalog' --architecture service-based
       if ($LASTEXITCODE -ne 0) { throw "Transactional init failed for $examplePath" }
     } else {
-      & uvx copier copy --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data-file (Join-Path $sourceRoot $examplePath) $sourceRoot $renderRoot
+      & uvx copier copy --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision" --data-file (Join-Path $sourceRoot $examplePath) $sourceRoot $renderRoot
       if ($LASTEXITCODE -ne 0) { throw "Copier render failed for $examplePath" }
     }
     Push-Location $renderRoot
@@ -72,7 +98,11 @@ foreach ($examplePath in $Example) {
         if ((Get-Content -Raw -Encoding utf8 .github/pull_request_template.md) -notmatch 'agent-standard:start') { throw 'Adoption did not merge the pull request checklist' }
         $settings = Get-Content -Raw -Encoding utf8 .claude/settings.json | ConvertFrom-Json
         if ($settings.permissions.allow -notcontains 'Read') { throw 'Adoption removed existing Claude permissions' }
-        if ((Get-Content -Raw -Encoding utf8 .claude/settings.json) -notmatch '\.agent-standard/scripts/dod\.mjs') { throw 'Adoption did not merge the Claude hook' }
+        $renderedManifest = Get-Content -Raw -Encoding utf8 .agent-standard/manifest.json | ConvertFrom-Json
+        $settingsText = Get-Content -Raw -Encoding utf8 .claude/settings.json
+        if ($renderedManifest.agents -contains 'claude') {
+          if ($settingsText -notmatch '\.agent-standard/scripts/dod\.mjs') { throw 'Adoption did not merge the Claude hook' }
+        } elseif ($settingsText -match '\.agent-standard/scripts/dod\.mjs') { throw 'Non-Claude adoption unexpectedly merged a Claude hook' }
         $owners = Get-Content -Raw -Encoding utf8 .github/CODEOWNERS
         if ($owners -notmatch '@legacy/payments' -or $owners -notmatch '# agent-standard:start') { throw 'Adoption did not preserve and extend CODEOWNERS' }
       }
@@ -129,6 +159,8 @@ foreach ($examplePath in $Example) {
 
       & uvx check-jsonschema --schemafile '.agent-standard/manifest.schema.json' '.agent-standard/manifest.json'
       if ($LASTEXITCODE -ne 0) { throw "Rendered manifest schema validation failed for $examplePath" }
+      $identity = Get-Content -Raw -Encoding utf8 '.agent-standard/manifest.json' | ConvertFrom-Json
+      if ($identity.standardVersion -ne '1.0.0' -or $identity.standardRevision -ne $standardRevision) { throw "Rendered manifest identity is invalid for $examplePath" }
       if ($isAzureDevOps) {
         & uvx check-jsonschema --schemafile '.agent-standard/platforms/azure-devops.schema.json' '.agent-standard/platforms/azure-devops.json'
         if ($LASTEXITCODE -ne 0) { throw "Azure DevOps adapter schema validation failed for $examplePath" }
@@ -160,7 +192,7 @@ foreach ($examplePath in $Example) {
       }
 
       if ($UpdateRoundTrip) {
-        & uvx copier update --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef
+        & uvx copier update --trust --defaults --answers-file .agent-standard/copier-answers.yml --vcs-ref $SourceRef --data "standard_revision=$standardRevision"
         if ($LASTEXITCODE -ne 0) { throw "Copier update failed for $examplePath" }
         & node .agent-standard/scripts/verify.mjs
         if ($LASTEXITCODE -ne 0) { throw "manifest verification failed after Copier update for $examplePath" }

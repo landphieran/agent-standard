@@ -1,7 +1,7 @@
 # Example 3 — greenfield Next.js full-stack app, clean/layered architecture.
 # Blocking gate, Claude + Copilot, required CI, Vitest unit + Playwright e2e layout.
 #
-#   copier copy --trust --vcs-ref HEAD --data-file examples/3-ts-next-clean-strict.yml \
+#   copier copy --trust --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA> --data-file examples/3-ts-next-clean-strict.yml \
 #     gh:landphieran/agent-standard ./web-app
 setup_profile: advanced
 project_name: web-app

@@ -1,0 +1,18 @@
+# Example 7 — existing TypeScript Node service adoption coverage.
+setup_profile: advanced
+project_name: existing-node-service
+language_stack: ts-node
+owners: "@example/node"
+architecture: service-based
+topology: modular-monolith
+mode: adopt
+workflow_profile: lightweight
+gate: strict
+agents:
+  - claude
+  - codex
+ci: true
+bom_format: cyclonedx-json
+bom_gate: strict
+security_profile: baseline
+release_attestations: false

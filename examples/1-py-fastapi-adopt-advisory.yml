@@ -2,7 +2,7 @@
 # No skeleton is written; the gate reports (advisory) rather than blocks; rulebook
 # goes to Claude only. Use this to try the standard on a repo without disruption.
 #
-#   copier copy --trust --vcs-ref HEAD --data-file examples/1-py-fastapi-adopt-advisory.yml \
+#   copier copy --trust --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA> --data-file examples/1-py-fastapi-adopt-advisory.yml \
 #     gh:landphieran/agent-standard ./existing-repo
 setup_profile: advanced
 project_name: payments-api

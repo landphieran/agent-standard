@@ -1,8 +1,8 @@
 # agent-standard
 
-A minimum viable, secure repository baseline for AI-agent-assisted development. It gives teams the same agent workflow, documentation lifecycle, quality checks, and supply-chain controls without requiring every repository to invent them again.
+A minimum viable, secure repository baseline for AI-agent-assisted development. Version 1.0 provides an immutable, deterministic baseline that can assess and adopt supported repositories without silently overwriting project-owned content.
 
-The default path is intentionally small: the installer detects an existing project, stages and verifies the change away from the working repository, preserves project-owned files, and applies the result only after bootstrap succeeds. Teams can opt into the full configuration surface when they need it.
+The default path is intentionally small: `agent-standard init` assesses first, stages and verifies the change away from the working repository, classifies ownership collisions, and applies only a fresh blocker-free plan. Teams can opt into the existing advanced Copier answers when they need them; v1 does not add an SDK, profile platform, migration engine, telemetry service, or transactional update system.
 
 ## What a repository receives
 
@@ -18,19 +18,23 @@ The default path is intentionally small: the installer detects an existing proje
 
 ## Recommended setup
 
-Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for isolated Copier execution. The project is pre-release, so the installer intentionally uses repository `HEAD` unless `--ref` is supplied.
+Prerequisites are Git, Node 22.13+, and [`uv`](https://docs.astral.sh/uv/) for isolated Copier execution. Replace `<FULL_SHA>` below with one published 40-character commit SHA. The same SHA pins both the executing package and the Copier template:
 
 ```bash
-npx --yes --package=github:landphieran/agent-standard agent-standard init ./my-service --owner '@acme/platform'
+npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init ./my-service \
+  --ref <FULL_SHA> --owner '@acme/platform' --architecture service-based
 ```
 
-For an existing repository, commit or stash current work and run the same command at its root. The installer infers its name, stack, adoption mode, and GitHub/Azure DevOps provider; security ownership remains an explicit choice:
+That command is assessment-only. It may run against a dirty repository and reports missing decisions or unsafe collisions without changing the destination. Review the plan, make the worktree clean, then add `--apply`; non-interactive mutation is impossible without that flag.
+
+For an existing repository, run the same command at its root. The installer infers its name, stack, adoption mode, and GitHub/Azure DevOps provider; ownership and architecture remain explicit choices:
 
 ```bash
-npx --yes --package=github:landphieran/agent-standard agent-standard init . --owner '@acme/platform'
+npx --yes --package=github:landphieran/agent-standard#<FULL_SHA> -- agent-standard init . \
+  --ref <FULL_SHA> --owner '@acme/platform' --architecture service-based
 ```
 
-Use `--dry-run` to inspect the verified file plan, `--scm azure-devops` when a new Azure Repos project has no origin yet, `--architecture clean-layered` to change the application layout, `--workflow spec-driven` for OpenSpec, or `--advanced` to answer every remaining control question. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable error instead of silently weakening SBOM accuracy.
+Use `--dry-run` to force no-mutation behavior, `--scm azure-devops` when a new Azure Repos project has no origin yet, `--workflow spec-driven` for OpenSpec, or `--advanced` to select existing advanced controls. `--development` is the only mode that permits `HEAD`, a branch, or a local mutable template and records the manifest revision as `development`. The supported minimum toolchains are npm for TypeScript and uv for Python; unsupported lockfiles stop adoption with an actionable finding instead of silently weakening SBOM accuracy.
 
 See [the adoption runbook](docs/runbook.md) for the full procedure and the lower-level Copier escape hatch.
 
@@ -48,14 +52,17 @@ npm test
 npm run verify:renders
 ```
 
-The render matrix exercises two paved paths plus five advanced configurations, including a realistic existing FastAPI repository and both Azure Pipeline modes. It verifies provider isolation, collision preservation, managed configuration merges, client skill discovery, OpenSpec ordering, dependency installation, both SBOM formats, stack-native checks, and idempotent Copier updates.
+The render matrix exercises every supported stack in greenfield and adoption modes, GitHub and Azure DevOps, standalone and central Azure Pipelines, both workflow profiles, and both SBOM formats. Remaining settings use pairwise coverage. It verifies provider isolation, preservation and managed merges, client skill discovery, OpenSpec ordering, dependency installation, stack-native checks, and selected idempotent Copier updates.
 
 ## Documentation
 
 - [Architecture and ownership](docs/architecture.md)
+- [Architecture, runbook, and business diagrams](docs/diagrams.md)
 - [Configuration reference](docs/configuration.md)
 - [Adoption and update runbook](docs/runbook.md)
 - [Conformance levels and states](docs/conformance.md)
+- [Version 1 release evidence](docs/release-evidence-v1.0.0.md)
+- [Business six-layer architecture brief](docs/briefs/agent-standard-six-layer-enterprise-architecture.docx)
 - [Supply-chain standard](docs/supply-chain.md)
 - [GitHub enforcement](docs/github-hardening.md)
 - [Azure DevOps adapter](docs/azure-devops.md)
@@ -63,6 +70,8 @@ The render matrix exercises two paved paths plus five advanced configurations, i
 - [Further standardization roadmap](docs/roadmap.md)
 - [Rendered examples](examples/README.md)
 
-## Status
+## Version 1 support boundary
 
-Pre-release. The current source identifies itself as `0.6.0-dev`; no compatibility promise or release has been published. GitHub and Azure DevOps repository settings are outside the generator boundary and remain explicitly unverified until an authorized administrator applies and audits them.
+The canonical product version is `package.json`; the manifest schema remains independently versioned at schema 1. Stable v1 interfaces are the documented `init` flags and exit meanings, Copier answer names and values, manifest schema, control identifiers, and ownership seams. Exact generated prose, complete file contents, console wording, and internal script structure may change in compatible releases.
+
+Supported adoption hosts are Windows 11 with PowerShell 7 and Ubuntu 24.04 with bash/PowerShell. macOS may work but is not certified for v1. GitHub and Azure DevOps repository settings remain outside the generator boundary and unverified until an authorized administrator applies and audits them.

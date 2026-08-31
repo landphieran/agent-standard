@@ -2,7 +2,7 @@
 # Blocking gate showcasing unit-vs-integration test SEPARATION (tests/unit vs
 # tests/integration), Claude + Codex, required CI.
 #
-#   copier copy --trust --vcs-ref HEAD --data-file examples/4-py-fastapi-clean-strict.yml \
+#   copier copy --trust --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA> --data-file examples/4-py-fastapi-clean-strict.yml \
 #     gh:landphieran/agent-standard ./ledger-api
 setup_profile: advanced
 project_name: ledger-api

@@ -24,9 +24,22 @@ const required = [
   "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja",
   'template/{{ _copier_conf.answers_file }}.jinja',
   'bin/agent-standard.mjs',
-  'scripts/run-render-verifier.mjs'
+  'scripts/run-render-verifier.mjs',
+  'docs/release-evidence-v1.0.0.md',
+  'pilot/agent-standard-pilot.ps1',
+  'pilot/pilot-settings.psd1',
+  'pilot/README.md'
 ]
 const findings = required.filter(path => !existsSync(resolve(root, path))).map(path => `${path} is missing`)
+let product
+try {
+  product = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  if (!/^\d+\.\d+\.\d+$/.test(product.version || '')) findings.push('package.json must contain the canonical stable product version')
+  const lock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'))
+  if (lock.version !== product.version || lock.packages?.['']?.version !== product.version) findings.push('package-lock.json product version must match package.json')
+} catch (error) {
+  findings.push(`package metadata is invalid JSON: ${error.message}`)
+}
 
 function filesBelow (relative) {
   const directory = resolve(root, relative)
@@ -52,6 +65,10 @@ if (manifest) {
     findings.push('source manifest must declare conformance state, governance ownership, workflow profile, and repository platform')
   }
   if (!Array.isArray(manifest.skills) || manifest.skills.length === 0) findings.push('source manifest must declare its generated skill catalog')
+  if (product && manifest.standardVersion !== product.version) findings.push('source manifest standardVersion must match the canonical package.json version')
+  if (manifest.standardRevision !== 'development' && !/^[0-9a-f]{40}$/.test(manifest.standardRevision || '')) {
+    findings.push('source manifest standardRevision must be development or a full lowercase commit SHA')
+  }
   for (const path of manifest.documents || []) if (!existsSync(resolve(root, path))) findings.push(`manifest document ${path} is missing`)
   for (const skill of manifest.skills || []) {
     if (!existsSync(resolve(root, `template/.ruler/skills/${skill}/SKILL.md`))) findings.push(`manifest skill ${skill} is missing from the template`)
@@ -88,12 +105,24 @@ for (const path of [
 
 const copier = readFileSync(resolve(root, 'copier.yml'), 'utf8')
 const bootstrap = readFileSync(resolve(root, 'template/.agent-standard/scripts/bootstrap.mjs'), 'utf8')
+const manifestTemplate = readFileSync(resolve(root, 'template/.agent-standard/manifest.json.jinja'), 'utf8')
+const manifestSchema = JSON.parse(readFileSync(resolve(root, 'template/.agent-standard/manifest.schema.json'), 'utf8'))
+const conformance = readFileSync(resolve(root, 'docs/conformance.md'), 'utf8')
 const azurePipeline = readFileSync(resolve(root, "template/{% if ci and repository_platform == 'azure-devops' %}azure-pipelines.yml{% endif %}.jinja"), 'utf8')
 const azureCentralTemplate = readFileSync(resolve(root, 'modules/azure-devops/templates/agent-standard.yml'), 'utf8')
 if (!copier.includes('_answers_file: .agent-standard/copier-answers.yml')) findings.push('Copier answers must be namespaced under .agent-standard')
 if (!copier.includes('repository_platform:')) findings.push('Copier must expose a repository platform selection')
 if (!copier.includes('azure_pipeline_mode:')) findings.push('Copier must expose the Azure Pipeline governance mode')
+if (!copier.includes('standard_revision:') || !copier.includes('default: development')) findings.push('Copier must carry the selected standard revision into rendered repositories')
+if (!copier.includes('copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>')) findings.push('Copier update guidance must pin and record the same immutable revision')
 if (!copier.includes("azure_template_ref | length != 40")) findings.push('Azure Pipeline template refs must require an immutable 40-character commit')
+if (product && !manifestTemplate.includes(`"standardVersion": "${product.version}"`)) findings.push('rendered manifest version must match the canonical package.json version')
+if (!manifestTemplate.includes('"standardRevision": "{{ standard_revision }}"')) findings.push('rendered manifest must record the selected standard revision')
+if (!manifestSchema.required?.includes('standardRevision')) findings.push('manifest schema must require standardRevision')
+if (manifestSchema.properties?.schemaVersion?.const !== 1) findings.push('manifest schema version changed without an independently justified schema migration')
+for (const control of ['AS-BASE-001', 'AS-ADOPT-001', 'AS-OWN-001', 'AS-RECOVER-001', 'AS-AGENT-001', 'AS-SKILL-001', 'AS-DOC-001', 'AS-QUAL-001', 'AS-QUAL-002', 'AS-SUPPLY-001', 'AS-SUPPLY-002', 'AS-REMOTE-001', 'AS-PROV-001']) {
+  if (!conformance.includes(`| ${control} |`)) findings.push(`Layer 1 control catalog is missing stable control ${control}`)
+}
 if (!bootstrap.includes('--gitignore=false')) findings.push('Ruler must keep generated agent files trackable')
 if (!bootstrap.includes('--no-skills')) findings.push('Ruler must not own client skill directories')
 if (!bootstrap.includes("'.agent-standard/scripts/sbom.mjs', '--write'")) findings.push('Bootstrap must refresh the configured SBOM')
@@ -119,6 +148,36 @@ for (const path of [...filesBelow('.github'), ...filesBelow('template/.github')]
   for (const match of workflow.matchAll(/uses:\s*[^@\s]+@([^\s#]+)/g)) {
     if (!/^[a-f0-9]{40}$/.test(match[1])) findings.push(`${path} uses a mutable Action reference: ${match[0]}`)
   }
+}
+
+const examples = filesBelow('examples').filter(path => /^examples\/\d+-.+\.yml$/.test(path))
+  .map(path => ({ path, text: readFileSync(resolve(root, path), 'utf8') }))
+const answer = (example, name, fallback = null) => example.text.match(new RegExp(`^${name}:\\s*([^\\s#]+)\\s*$`, 'm'))?.[1] || fallback
+for (const stack of ['ts-node', 'ts-next', 'py-fastapi']) {
+  for (const mode of ['greenfield', 'adopt']) {
+    if (!examples.some(example => answer(example, 'language_stack') === stack && answer(example, 'mode') === mode)) {
+      findings.push(`render matrix is missing ${stack} × ${mode} coverage`)
+    }
+  }
+}
+if (!examples.some(example => answer(example, 'repository_platform', 'github') === 'github')) findings.push('render matrix is missing the GitHub provider')
+for (const pipelineMode of ['standalone', 'extends']) {
+  if (!examples.some(example => answer(example, 'repository_platform', 'github') === 'azure-devops' && answer(example, 'azure_pipeline_mode', 'standalone') === pipelineMode)) {
+    findings.push(`render matrix is missing Azure DevOps ${pipelineMode} pipeline coverage`)
+  }
+}
+for (const workflow of ['lightweight', 'spec-driven']) {
+  if (!examples.some(example => answer(example, 'workflow_profile', 'lightweight') === workflow)) findings.push(`render matrix is missing ${workflow} workflow coverage`)
+}
+for (const bom of ['cyclonedx-json', 'spdx-json']) {
+  if (!examples.some(example => [answer(example, 'bom_format', 'cyclonedx-json'), 'both'].includes(bom) || answer(example, 'bom_format') === 'both')) {
+    findings.push(`render matrix is missing ${bom} SBOM coverage`)
+  }
+}
+
+for (const path of [...filesBelow('docs'), ...filesBelow('template/docs'), ...filesBelow('template')]
+  .filter(path => !path.includes('/node_modules/') && ['.md', '.jinja'].includes(extname(path)))) {
+  if (readFileSync(resolve(root, path), 'utf8').includes('agent-standard-0.6.0-dev')) findings.push(`${path} carries a stale product version`)
 }
 
 const sbom = spawnSync(process.execPath, [resolve(root, 'template/.agent-standard/scripts/sbom.mjs'), '--check'], {

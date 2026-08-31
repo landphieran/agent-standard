@@ -11,8 +11,13 @@ permissions:
   contents: read
 jobs:
   source:
-    runs-on: ubuntu-latest
+    name: Source and CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
@@ -35,6 +40,8 @@ jobs:
           - examples/4-py-fastapi-clean-strict.yml
           - examples/5-ts-node-azure-devops-standard.yml
           - examples/6-ts-node-azure-devops-extends.yml
+          - examples/7-ts-node-adopt.yml
+          - examples/8-ts-next-adopt.yml
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5

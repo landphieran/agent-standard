@@ -1,0 +1,18 @@
+# Example 8 — existing Next.js application adoption coverage.
+setup_profile: advanced
+project_name: existing-web-app
+language_stack: ts-next
+owners: "@example/web"
+architecture: clean-layered
+topology: single-deployable
+mode: adopt
+workflow_profile: lightweight
+gate: strict
+agents:
+  - codex
+  - copilot
+ci: true
+bom_format: spdx-json
+bom_gate: strict
+security_profile: baseline
+release_attestations: false

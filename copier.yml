@@ -221,6 +221,23 @@ release_attestations:
 # ── derived / non-asked ──────────────────────────────────────────────────────
 
 # Import-safe package name derived from the project name (e.g. "My Service" -> "my_service").
+# The product version is copied from package.json and verified against it by
+# scripts/verify-source.mjs. The revision is supplied by the installer (or by a
+# direct Copier caller) so every rendered repository records the exact source it
+# adopted. `development` is reserved for explicit local/template development.
+standard_revision:
+  type: str
+  when: false
+  default: development
+  validator: >-
+    {% set state = namespace(invalid=false) %}
+    {% for character in standard_revision %}
+    {% if character not in '0123456789abcdef' %}{% set state.invalid = true %}{% endif %}
+    {% endfor %}
+    {% if standard_revision != 'development' and (standard_revision | length != 40 or state.invalid) %}
+    Use a full lowercase 40-character Git commit SHA, or development only for explicit local development.
+    {% endif %}
+
 pkg:
   type: str
   when: false
@@ -236,7 +253,7 @@ _message_after_copy: |
   {% if repository_platform == 'azure-devops' %}  - create the Azure Pipeline from azure-pipelines.yml, require it through Build Validation, then run the read-only Azure DevOps audit
   {% else %}  - require the generated checks through a GitHub ruleset and review the security settings
   {% endif %}
-    - pull future standard updates with:  copier update --trust --answers-file .agent-standard/copier-answers.yml
+    - pull a reviewed standard revision with:  copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>
 
 # Files that must never be rendered by Copier because another tool owns them.
 # ruler generates CLAUDE.md and AGENTS.md from .ruler/*; rendering them here would

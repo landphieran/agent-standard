@@ -1,6 +1,6 @@
 # Configuration reference
 
-Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collisions with other Copier templates in the same repository. Reuse it with `copier update --trust --answers-file .agent-standard/copier-answers.yml`.
+Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collisions with other Copier templates in the same repository. Reuse it with `copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>` so the rendered manifest records the same immutable revision Copier used.
 
 ## Setup profiles
 
@@ -16,7 +16,7 @@ Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collision
 | `mode` | `greenfield`, `adopt` | Scaffold source/config files or preserve and integrate with an existing repository |
 | `repository_platform` | `github`, `azure-devops` | `github` for direct Copier use; the recommended installer detects the origin and supports `--scm` override |
 | `owners` | `@owner` aliases | Required portable ownership intent; rendered into CODEOWNERS on GitHub and the Azure adapter contract on Azure DevOps |
-| `architecture` | `service-based`, `clean-layered` | Chosen for greenfield; `service-based` default during standard adoption |
+| `architecture` | `service-based`, `clean-layered` | Direct Copier default is `service-based`; the supported v1 installer requires an explicit adoption decision before apply |
 | `topology` | `single-deployable`, `modular-monolith`, `distributed-services` | `modular-monolith`; kept separate from code architecture |
 | `workflow_profile` | `lightweight`, `spec-driven` | `lightweight`; proportional native plans or the full OpenSpec lifecycle |
 | `gate` | `strict`, `advisory` | `strict`; whether Definition-of-Done findings block |
@@ -36,9 +36,11 @@ Answers are recorded in `.agent-standard/copier-answers.yml`, avoiding collision
 
 The manifest records `project.packageManager`: npm for TypeScript and uv for Python. Both bootstrap and CI use that standardized command set. The transactional installer rejects pnpm, Yarn, Bun, Poetry, PDM, and Pipenv lockfiles until the standard has matching locked-install and SBOM support; it never silently falls back to an unlocked or declaration-only result.
 
+`standard_revision` is a hidden rendering input rather than an organization profile. Supported release adoption supplies a lowercase full commit SHA; `development` is permitted only by an explicit development invocation. `package.json` is the canonical product version, while manifest schema version 1 changes only when the manifest shape becomes incompatible.
+
 ## Project manifest
 
-`.agent-standard/manifest.json` is the machine-readable source of truth for selected settings, target and current conformance state, repository/CI platform, commands, governed documents, skills, waivers, and supply-chain policy. Its schema is committed beside it. Provider-specific desired state lives under `.agent-standard/platforms/` and is checked against the portable manifest instead of creating a competing repository registry.
+`.agent-standard/manifest.json` is the machine-readable source of truth for product version/revision, selected settings, target and current conformance state, repository/CI platform, commands, governed documents, skills, waivers, and supply-chain policy. Its schema is committed beside it. Provider-specific desired state lives under `.agent-standard/platforms/` and is checked against the portable manifest instead of creating a competing repository registry.
 
 ## Workflow profiles
 
@@ -65,7 +67,7 @@ A waiver applies only while unexpired and only when every changed source path ma
 
 ## Adoption ownership boundary
 
-Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the provider-appropriate delimited ownership/review blocks plus the exact Claude hook command. Future updates use Copier’s three-way merge and must be reviewed like source changes.
+Copier owns the standard kernel. Existing project documentation and common shared configuration are skipped on initial adoption; `merge-config.mjs` owns only the provider-appropriate delimited ownership/review blocks plus the exact Claude hook command. Supported team adoption uses the assessment-first CLI to protect the wider generated-path boundary. Future updates use Copier’s three-way merge and must be reviewed like source changes.
 
 Azure DevOps implementation and one-time administrator steps are documented in [azure-devops.md](azure-devops.md). Azure workload deployment configuration is intentionally a separate future profile; choosing Azure Repos must not silently introduce subscriptions, service connections, or cloud resources.
 

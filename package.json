@@ -1,6 +1,6 @@
 {
   "name": "agent-standard",
-  "version": "0.0.0-private",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": {

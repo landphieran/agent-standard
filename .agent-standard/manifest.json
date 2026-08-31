@@ -1,7 +1,8 @@
 {
   "$schema": "../template/.agent-standard/manifest.schema.json",
   "schemaVersion": 1,
-  "standardVersion": "0.6.0-dev",
+  "standardVersion": "1.0.0",
+  "standardRevision": "development",
   "conformanceLevel": "AS-3",
   "conformance": {
     "target": "AS-3",
@@ -31,7 +32,7 @@
     "verify": "npm test",
     "updateBom": "npm run sbom"
   },
-  "documents": ["README.md", "AGENTS.md", "SECURITY.md", "CONTRIBUTING.md", "docs/architecture.md", "docs/configuration.md", "docs/runbook.md"],
+  "documents": ["README.md", "AGENTS.md", "SECURITY.md", "CONTRIBUTING.md", "docs/architecture.md", "docs/diagrams.md", "docs/configuration.md", "docs/conformance.md", "docs/runbook.md", "docs/release-evidence-v1.0.0.md", "pilot/README.md"],
   "skills": ["plan-change", "create-adr", "maintain-docs", "self-review", "security-review"],
   "qualityGate": { "mode": "strict", "ci": true, "waivers": ".agent-standard/waivers.json" },
   "supplyChain": {

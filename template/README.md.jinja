@@ -58,7 +58,7 @@ The manifest keeps local results separate from remotely audited enforcement, so 
 ## Updating the standard
 
 ```bash
-copier update --trust --answers-file .agent-standard/copier-answers.yml
+copier update --trust --answers-file .agent-standard/copier-answers.yml --vcs-ref <FULL_SHA> --data standard_revision=<FULL_SHA>
 ```
 
 After an update, reinstall dependencies, refresh the SBOM, run the manifest verification

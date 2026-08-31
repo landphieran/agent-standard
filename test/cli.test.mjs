@@ -1,11 +1,21 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertSupportedToolchain, changedFiles, detectRepositoryPlatform } from '../bin/agent-standard.mjs'
+import {
+  assessRevision,
+  assertSupportedToolchain,
+  changedFiles,
+  classifyAdoptionChanges,
+  copyAtomically,
+  detectRepositoryPlatform,
+  ownershipBlockers,
+  snapshotPaths,
+  snapshotsEqual
+} from '../bin/agent-standard.mjs'
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -87,4 +97,148 @@ test('the npm-installed bin entry point executes through its package shim', () =
   })
   assert.equal(result.status, 0, result.error?.message || result.stderr)
   assert.match(result.stdout, /agent-standard init/)
+})
+
+test('release assessment rejects mutable refs and development mode is explicit', () => {
+  const immutable = '0123456789abcdef0123456789abcdef01234567'
+  assert.deepEqual(assessRevision(immutable, false), { ref: immutable, revision: immutable, blocker: null })
+  assert.equal(assessRevision('main', false).blocker.code, 'mutable-revision')
+  assert.equal(assessRevision(undefined, false).blocker.code, 'mutable-revision')
+  assert.deepEqual(assessRevision(undefined, true), { ref: 'HEAD', revision: 'development', blocker: null })
+})
+
+test('read-only assessment reports dirty and missing decisions without mutation', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-assess-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const git = args => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+  git(['init', '-q'])
+  git(['config', 'user.email', 'agent-standard@example.invalid'])
+  git(['config', 'user.name', 'agent-standard verifier'])
+  write(root, 'README.md', '# project\n')
+  git(['add', '-A'])
+  git(['commit', '-qm', 'fixture'])
+  write(root, 'README.md', '# dirty project\n')
+  const before = readFileSync(join(root, 'README.md'), 'utf8')
+
+  const assessment = spawnSync(process.execPath, [join(REPO, 'bin', 'agent-standard.mjs'), 'init', root], { encoding: 'utf8' })
+  assert.equal(assessment.status, 0, assessment.stderr)
+  assert.match(assessment.stdout, /clean worktree/i)
+  assert.match(assessment.stdout, /application requires one or more portable owner aliases/i)
+  assert.match(assessment.stdout, /full 40-character Git commit SHA/i)
+  assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), before)
+  assert.equal(existsSync(join(root, '.agent-standard')), false)
+
+  const apply = spawnSync(process.execPath, [join(REPO, 'bin', 'agent-standard.mjs'), 'init', root, '--apply'], { encoding: 'utf8' })
+  assert.equal(apply.status, 2, apply.stderr)
+  assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), before)
+})
+
+test('ownership assessment inventories agent, standard, OpenSpec, and client-skill collisions', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-ownership-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const git = args => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+  git(['init', '-q'])
+  write(root, '.gitignore', 'packages/ignored/\n')
+  write(root, '.agent-standard/custom.json', '{}\n')
+  write(root, '.ruler/00-project.md', '# existing rules\n')
+  write(root, 'AGENTS.md', '# root rules\n')
+  write(root, 'packages/api/CLAUDE.md', '# nested rules\n')
+  write(root, 'packages/ignored/AGENTS.md', '# ignored nested rules\n')
+  write(root, '.agents/skills/plan-change/SKILL.md', '# project skill\n')
+  write(root, 'openspec/config.yml', 'schema: spec-driven\n')
+
+  const blockers = ownershipBlockers(root, { workflow: 'spec-driven' })
+  const keys = blockers.map(blocker => `${blocker.code}:${blocker.path}`).sort()
+  assert.deepEqual(keys, [
+    'existing-agent-instructions:AGENTS.md',
+    'existing-agent-instructions:packages/api/CLAUDE.md',
+    'existing-agent-instructions:packages/ignored/AGENTS.md',
+    'existing-client-skill:.agents/skills/plan-change',
+    'existing-openspec:openspec',
+    'existing-ruler:.ruler',
+    'existing-standard:.agent-standard'
+  ])
+})
+
+test('change classification permits only no-op, create, and validated managed merges', t => {
+  const target = mkdtempSync(join(tmpdir(), 'agent-standard-cli-target-'))
+  const stage = mkdtempSync(join(tmpdir(), 'agent-standard-cli-stage-'))
+  t.after(() => {
+    rmSync(target, { recursive: true, force: true })
+    rmSync(stage, { recursive: true, force: true })
+  })
+  write(target, 'same.txt', 'same\n')
+  write(stage, 'same.txt', 'same\n')
+  write(stage, '.agent-standard/new.txt', 'new\n')
+  write(target, '.github/pull_request_template.md', '# Project review\n')
+  write(stage, '.github/pull_request_template.md', [
+    '# Project review',
+    '',
+    '<!-- agent-standard:start -->',
+    '## Standard checks',
+    '<!-- agent-standard:end -->',
+    ''
+  ].join('\n'))
+  write(target, '.github/workflows/dod.yml', 'name: project workflow\n')
+  write(stage, '.github/workflows/dod.yml', 'name: standard workflow\n')
+
+  const plan = classifyAdoptionChanges(target, stage, [
+    '.agent-standard/new.txt',
+    '.github/pull_request_template.md',
+    '.github/workflows/dod.yml',
+    'same.txt'
+  ])
+  assert.deepEqual(plan.create, ['.agent-standard/new.txt'])
+  assert.deepEqual(plan.merge, ['.github/pull_request_template.md'])
+  assert.deepEqual(plan.noOp, ['same.txt'])
+  assert.deepEqual(plan.blockers.map(blocker => `${blocker.code}:${blocker.path}`), [
+    'unowned-collision:.github/workflows/dod.yml'
+  ])
+})
+
+test('malformed managed markers block adoption before rendering', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-markers-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  write(root, '.github/CODEOWNERS', '# agent-standard:start\n/project @product/team\n')
+  const blockers = ownershipBlockers(root)
+  assert.deepEqual(blockers.map(blocker => `${blocker.code}:${blocker.path}`), [
+    'malformed-managed-markers:.github/CODEOWNERS'
+  ])
+})
+
+test('destination fingerprints detect collision-sensitive drift', t => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-standard-cli-drift-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  write(root, '.github/workflows/dod.yml', 'name: first\n')
+  const before = snapshotPaths(root, ['.github/workflows/dod.yml', '.agent-standard/manifest.json'])
+  assert.equal(snapshotsEqual(before, snapshotPaths(root, ['.github/workflows/dod.yml', '.agent-standard/manifest.json'])), true)
+  write(root, '.github/workflows/dod.yml', 'name: changed\n')
+  assert.equal(snapshotsEqual(before, snapshotPaths(root, ['.github/workflows/dod.yml', '.agent-standard/manifest.json'])), false)
+})
+
+test('partial-copy failure restores replaced files and removes newly created paths', t => {
+  const target = mkdtempSync(join(tmpdir(), 'agent-standard-cli-copy-target-'))
+  const stage = mkdtempSync(join(tmpdir(), 'agent-standard-cli-copy-stage-'))
+  const backup = mkdtempSync(join(tmpdir(), 'agent-standard-cli-copy-backup-'))
+  t.after(() => {
+    rmSync(target, { recursive: true, force: true })
+    rmSync(stage, { recursive: true, force: true })
+    rmSync(backup, { recursive: true, force: true })
+  })
+  write(target, 'existing.txt', 'project\n')
+  write(stage, 'existing.txt', 'standard\n')
+  write(stage, 'nested/new.txt', 'new\n')
+  let copies = 0
+  const injectedCopy = (source, destination) => {
+    copies++
+    if (copies === 2) throw new Error('injected copy failure')
+    copyFileSync(source, destination)
+  }
+
+  assert.throws(
+    () => copyAtomically(stage, target, ['existing.txt', 'nested/new.txt'], backup, { copyFile: injectedCopy }),
+    /injected copy failure/
+  )
+  assert.equal(readFileSync(join(target, 'existing.txt'), 'utf8'), 'project\n')
+  assert.equal(existsSync(join(target, 'nested')), false)
 })

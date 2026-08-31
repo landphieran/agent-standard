@@ -45,11 +45,17 @@ npm run verify:portable
 
 The command renders all six profiles, creates their committed dependency files,
 runs each starter's complete verification, removes generated install/build/test
-output, and scans the complete release tree and archive for excluded tools.
+output, and scans the complete release tree and archive for excluded tools. It
+fails if the source checkout is dirty so the recorded revision cannot diverge
+from the archived content.
 The archive is written to `portable/dist/`, which is intentionally ignored by
 Git. Release the generated archive only after running this command from the
 immutable commit that will be tagged.
 
 The release metadata records the source revision, host prerequisites, and a
-SHA-256 digest for each bundle. The standard release gate in
-[release evidence](release-evidence-v1.0.0.md) still applies independently.
+path-bound SHA-256 file inventory for each bundle. The bundle digest is the
+SHA-256 of the compact JSON `files` array, whose entries are sorted by path and
+contain each relative path and file SHA-256. CI rebuilds and verifies all six
+starters on Ubuntu with the minimum supported Python version. The standard
+release gate in [release evidence](release-evidence-v1.0.0.md) still applies
+independently.

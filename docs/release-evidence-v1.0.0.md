@@ -20,6 +20,7 @@ Status: core implementation verified locally; release authorization requires the
 | Render matrix | Passed across nine configurations: every stack × greenfield/adopt, GitHub, Azure standalone/extends, both workflows, both SBOM formats; pairwise remaining settings |
 | Stack-native generated verification | Passed for TypeScript Node, Next.js (unit, browser E2E, production build), and FastAPI |
 | Selected Copier update/idempotence | Passed locally from a clean immutable commit for the GitHub spec-driven and Azure central-template fixtures; release CI reruns against the authorized final SHA |
+| Portable distribution | Passed locally on Windows across six static GitHub/Azure and Node/Next.js/FastAPI starters; CI rebuilds the archive from a clean checkout on Ubuntu with Python 3.11 |
 | Supported hosts | Windows 11/PowerShell 7 verified locally; CI requires Windows 2025 and Ubuntu 24.04 jobs on the final commit |
 
 Warnings about local CRLF conversion and Copier's dirty-template development version are expected in working-tree verification and are not release evidence. Release adoption must use the final full SHA in both the npx package source and `--ref`.
@@ -27,6 +28,8 @@ Warnings about local CRLF conversion and Copier's dirty-template development ver
 ## Release gates
 
 **Core release gate:** complete when the final clean commit passes `npm test`, all nine renders, the two selected update round trips, the recovery rehearsal, and both CI host jobs. No remote repository or organization settings are changed by this gate.
+
+**Portable release gate:** complete when the final clean commit builds all six starters, verifies each stack-native gate and current SBOM, scans the archive boundary, records path-bound file digests, and passes the dedicated Ubuntu CI job at the minimum supported Python version.
 
 **Organization pilot gate:** independently requires an approved repository cohort, real team owners, policy/support links, approved revision, recovery owner, and representative assessment snapshots. The small wrapper under `pilot/` invokes the public CLI and collects pilot measures manually; it is not part of the generated core.
 

@@ -8,7 +8,7 @@ trigger:
 
 pr: none
 
-{% if azure_pipeline_mode == 'extends' %}
+{%- if azure_pipeline_mode == 'extends' %}
 resources:
   repositories:
     - repository: agent_standard_templates
@@ -22,13 +22,13 @@ extends:
     stack: {{ language_stack | tojson }}
     securityProfile: {{ security_profile | tojson }}
     sbomFormats:
-{% if bom_format in ['cyclonedx-json', 'both'] %}
+{%- if bom_format in ['cyclonedx-json', 'both'] %}
       - cyclonedx-json
-{% endif %}
-{% if bom_format in ['spdx-json', 'both'] %}
+{%- endif %}
+{%- if bom_format in ['spdx-json', 'both'] %}
       - spdx-json
-{% endif %}
-{% else %}
+{%- endif %}
+{%- else %}
 jobs:
   - job: verify
     displayName: Verify repository contract
@@ -50,29 +50,29 @@ jobs:
         inputs:
           version: 22.x
 
-{% if security_profile == 'hardened' %}
+{%- if security_profile == 'hardened' %}
       - task: AdvancedSecurity-Codeql-Init@1
         displayName: Initialize CodeQL
         inputs:
           languages: {% if language_stack == 'py-fastapi' %}python{% else %}javascript{% endif %}
           enableAutomaticCodeQLInstall: true
 
-{% endif %}
-{% if language_stack in ['ts-node', 'ts-next'] %}
+{%- endif %}
+{%- if language_stack in ['ts-node', 'ts-next'] %}
       - script: npm ci
         displayName: Install locked dependencies
-{% if language_stack == 'ts-next' %}
+{%- if language_stack == 'ts-next' %}
 
       - script: npx playwright install --with-deps chromium
         displayName: Install Playwright Chromium
-{% endif %}
-{% else %}
+{%- endif %}
+{%- else %}
       - script: python -m pip install uv==0.10.8
         displayName: Install pinned uv
 
       - script: uv sync --locked --all-groups
         displayName: Install locked dependencies
-{% endif %}
+{%- endif %}
 
       - script: node .agent-standard/scripts/verify.mjs
         displayName: Verify repository contract
@@ -86,26 +86,26 @@ jobs:
       - task: AdvancedSecurity-Dependency-Scanning@1
         displayName: Scan dependencies
 
-{% if security_profile == 'hardened' %}
+{%- if security_profile == 'hardened' %}
       - task: AdvancedSecurity-Codeql-Analyze@1
         displayName: Analyze CodeQL database
         inputs:
           WaitForProcessing: true
 
-{% endif %}
-{% if bom_format in ['cyclonedx-json', 'both'] %}
+{%- endif %}
+{%- if bom_format in ['cyclonedx-json', 'both'] %}
       - task: PublishPipelineArtifact@1
         displayName: Publish CycloneDX SBOM
         inputs:
           targetPath: bom.cdx.json
           artifact: {{ (pkg ~ '-cyclonedx-sbom') | tojson }}
 
-{% endif %}
-{% if bom_format in ['spdx-json', 'both'] %}
+{%- endif %}
+{%- if bom_format in ['spdx-json', 'both'] %}
       - task: PublishPipelineArtifact@1
         displayName: Publish SPDX SBOM
         inputs:
           targetPath: bom.spdx.json
           artifact: {{ (pkg ~ '-spdx-sbom') | tojson }}
-{% endif %}
-{% endif %}
+{%- endif %}
+{%- endif %}

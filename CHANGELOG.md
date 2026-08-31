@@ -6,6 +6,7 @@ This file records product releases independently from manifest schema revisions.
 
 ## 1.0.0 - 2026-08-30
 
+- Added six verified, static greenfield starter repositories for GitHub and Azure Repos teams limited to Git, Node/npm, and Python/pip.
 - Established the v1 promise: immutable, deterministic assessment and adoption without silent overwrite of project-owned content.
 - Made `init` assessment-first, required `--apply` for non-interactive mutation, allowed dirty/missing-decision assessments, and added stable exit meanings.
 - Added full revision identity, collision classification across generated and agent-owned paths, apply-time drift checks, and partial-copy failure rollback proof.

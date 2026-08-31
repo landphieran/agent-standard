@@ -61,6 +61,11 @@ function git (gitArgs) {
   return command('git', gitArgs, { capture: true }).trim()
 }
 
+export function validateReleaseSource (revision, status) {
+  if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('portable release requires a full source revision')
+  if (status.trim()) throw new Error('portable release requires a clean source checkout')
+}
+
 function copyDirectory (source, destination) {
   mkdirSync(destination, { recursive: true })
   for (const entry of readdirSync(source, { withFileTypes: true })) {
@@ -77,6 +82,17 @@ function filesBelow (directory, prefix = '') {
     const path = join(directory, entry.name)
     return entry.isDirectory() ? filesBelow(path, child) : [child]
   })
+}
+
+export function fingerprintBundle (directory) {
+  const files = filesBelow(directory).sort().map(path => ({
+    path,
+    sha256: createHash('sha256').update(readFileSync(join(directory, path))).digest('hex')
+  }))
+  return {
+    sha256: createHash('sha256').update(JSON.stringify(files)).digest('hex'),
+    files
+  }
 }
 
 function readJson (path) {
@@ -335,7 +351,6 @@ function createPythonRequirements (destination) {
   command('python', ['-m', 'venv', venv], { cwd: destination })
   const python = pythonExecutable(venv)
   try {
-    command(python, ['-m', 'pip', 'install', '--upgrade', 'pip'], { cwd: destination })
     command(python, ['-m', 'pip', 'install', ...PYTHON_REQUIREMENTS], { cwd: destination })
     const requirements = command(python, ['-m', 'pip', 'freeze', '--all'], { cwd: destination, capture: true })
       .split(/\r?\n/)
@@ -478,7 +493,7 @@ function archiveNames (path) {
 
 export function buildPortableRelease (target = output) {
   const revision = git(['rev-parse', 'HEAD'])
-  if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('portable release requires a full source revision')
+  validateReleaseSource(revision, git(['status', '--porcelain', '--untracked-files=all']))
   const staging = mkdtempSync(join(tmpdir(), 'agent-standard-portable-'))
   const releaseRoot = join(staging, `agent-standard-portable-${version}`)
   mkdirSync(releaseRoot, { recursive: true })
@@ -510,8 +525,14 @@ export function buildPortableRelease (target = output) {
       format: 'agent-standard-portable',
       version,
       sourceRevision: revision,
+      digestFormat: 'sha256-file-inventory-v1',
       hostPrerequisites: { git: '>=2.27', node: '>=22.13', python: '>=3.11 (Python bundles only)' },
-      bundles: profiles.map(profile => ({ id: profile.id, stack: profile.stack, platform: profile.platform, sha256: createHash('sha256').update(filesBelow(join(bundlesRoot, profile.id)).sort().map(path => readFileSync(join(bundlesRoot, profile.id, path))).join('')).digest('hex') }))
+      bundles: profiles.map(profile => ({
+        id: profile.id,
+        stack: profile.stack,
+        platform: profile.platform,
+        ...fingerprintBundle(join(bundlesRoot, profile.id))
+      }))
     }
     writeJson(join(releaseRoot, 'RELEASE-MANIFEST.json'), manifest)
     assertPortable(releaseRoot)

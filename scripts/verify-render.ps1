@@ -175,7 +175,7 @@ foreach ($examplePath in $Example) {
         if ($LASTEXITCODE -ne 0) { throw "Azure DevOps adapter schema validation failed for $examplePath" }
         & uv run --no-project --with $jsonSchemaTool python -m check_jsonschema --check-metaschema '.agent-standard/evidence/azure-devops-audit.schema.json'
         if ($LASTEXITCODE -ne 0) { throw "Azure DevOps evidence schema is invalid for $examplePath" }
-        & uv run --no-project --with $yamlLintTool python -m yamllint -d relaxed 'azure-pipelines.yml'
+        & uv run --no-project --with $yamlLintTool python -m yamllint -s -d relaxed 'azure-pipelines.yml'
         if ($LASTEXITCODE -ne 0) { throw "Azure Pipeline YAML validation failed for $examplePath" }
       }
 

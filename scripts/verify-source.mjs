@@ -130,6 +130,7 @@ for (const [variable, module] of [['jsonSchemaTool', 'python -m check_jsonschema
     findings.push(`Render verification must use the Windows-compatible pinned module entry point: ${module}`)
   }
 }
+if (!renderVerifier.includes('python -m yamllint -s -d relaxed')) findings.push('Azure Pipeline YAML warnings must fail render verification')
 if (!readme.includes('npx.cmd --yes "--package=github:landphieran/agent-standard#<FULL_SHA>"')) findings.push('README must provide a PowerShell-safe package invocation')
 if (!copier.includes("azure_template_ref | length != 40")) findings.push('Azure Pipeline template refs must require an immutable 40-character commit')
 if (product && !manifestTemplate.includes(`"standardVersion": "${product.version}"`)) findings.push('rendered manifest version must match the canonical package.json version')

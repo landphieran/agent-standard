@@ -62,6 +62,7 @@ The advanced profile exposes architecture, topology, workflow, enforcement, clie
 npm install
 npm test
 npm run verify:renders
+npm run verify:portable
 ```
 
 The render matrix exercises every supported stack in greenfield and adoption modes, GitHub and Azure DevOps, standalone and central Azure Pipelines, both workflow profiles, and both SBOM formats. Remaining settings use pairwise coverage. It verifies provider isolation, preservation and managed merges, client skill discovery, OpenSpec ordering, dependency installation, stack-native checks, and selected idempotent Copier updates.
